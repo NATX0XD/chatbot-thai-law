@@ -32,12 +32,18 @@
 
 1. **บัญชี GitHub** — Render build image จาก git repo
 2. **บัญชี Render** — https://dashboard.render.com
-3. **DeepInfra API key** — https://deepinfra.com/dash/api_keys
-   `BAAI/bge-m3` ราคา **$0.010 ต่อ 1M tokens** คำถามหนึ่งครั้งกินราว 40 tokens
-   คิดเป็นราว **$0.0004 ต่อคำถาม 1,000 ครั้ง** ถือว่าเท่ากับฟรี
-   ถ้าไม่อยากใช้ DeepInfra เปลี่ยนได้ที่ `EMBED_BASE_URL` + `EMBED_API_MODEL` โดยไม่ต้องแก้โค้ด
-   ขอแค่เจ้านั้นเสิร์ฟ `BAAI/bge-m3` ตัวเดียวกัน (เช่น OVHcloud AI Endpoints)
-   **SiliconFlow ใช้ไม่ได้** เพราะสมัครต้องใช้เบอร์โทรจีน
+3. **บัญชี Cloudflare** (ฟรี ไม่ต้องผูกบัตร) — ใช้ Workers AI รัน `@cf/baai/bge-m3`
+   ต้องเก็บมา 2 ค่า
+   - **Account ID** — dash.cloudflare.com > Workers & Pages > แถบขวา
+   - **API token** — dash.cloudflare.com/profile/api-tokens > Create Token
+     สิทธิ์ `Account` > `Workers AI` > `Read`
+
+   ฟรี **10,000 neurons/วัน** และ bge-m3 คิด 1,075 neurons ต่อ 1M input tokens
+   = ราว **9.3M tokens/วัน** คำถามหนึ่งครั้งกิน ~40 tokens จึงได้ราว 230,000 คำถาม/วัน
+
+   **DeepInfra ใช้ไม่ได้ถ้าไม่อยากเสียเงิน** ต้องผูกบัตรหรือเติมเงินก่อน ไม่งั้นได้ 402
+   **SiliconFlow ใช้ไม่ได้** สมัครต้องใช้เบอร์โทรจีน
+   **NVIDIA NIM ปิด bge-m3** ไปแล้วเมื่อ 24 ส.ค. 2026
 
 ---
 
@@ -51,10 +57,17 @@ cosine จะเลื่อนหมด เกณฑ์ `min_dense_sim = 0.54` 
 
 ```bash
 cd ~/thai-law-bot
-EMBED_API_KEY=<คีย์ DeepInfra> .venv/bin/python -m pytest tests/test_embed_parity.py -q -s
+EMBED_API_KEY=<token> \
+EMBED_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1 \
+EMBED_API_MODEL='@cf/baai/bge-m3' \
+.venv/bin/python -m pytest tests/test_embed_parity.py -q -s
 ```
 
-ต้องผ่านทุกข้อ ค่า cosine ต้อง ≥ 0.99 (ปกติจะได้ 0.999x) และลำดับผลค้นคืนต้องตรงกับตอนใช้โมเดลในเครื่อง
+ต้องผ่านทุกข้อ ค่า cosine ต้อง ≥ 0.99 และลำดับผลค้นคืนต้องตรงกับตอนใช้โมเดลในเครื่อง
+
+ผลที่วัดไว้กับ Cloudflare เมื่อ 24 ส.ค. 2026 คือ **cosine 0.999999** ทุก query
+และ calibration ผ่าน endpoint จริงยังได้ in-scope 14/14, off-topic 0/5, missing-law 0/5
+เท่ากับตอนรันโมเดลในเครื่อง
 
 ### 2. push ขึ้น GitHub
 
@@ -91,7 +104,8 @@ Environment → Add Environment Variable (ใน `render.yaml` ตั้ง `syn
 
 | Key | ค่า |
 |---|---|
-| `EMBED_API_KEY` | คีย์ DeepInfra |
+| `EMBED_API_KEY` | Cloudflare API token |
+| `EMBED_BASE_URL` | `https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1` |
 | `TYPHOON_API_KEY` | คีย์ Typhoon |
 | `LINE_CHANNEL_SECRET` | จาก LINE Console |
 | `LINE_CHANNEL_ACCESS_TOKEN` | จาก LINE Console |
@@ -122,7 +136,24 @@ https://<service>.onrender.com/webhook
 ```
 
 กด **Verify** แล้วเปิด **Use webhook**
+
+หรือสั่งจากเครื่องทีเดียวจบ (เช็ก `/health` ก่อน แล้วค่อยตั้งและให้ LINE ยิงทดสอบ)
+
+```bash
+scripts/point_line_at.sh https://<service>.onrender.com
+```
+
+สคริปต์จะไม่ยอมตั้งถ้า URL นั้นไม่ได้เสิร์ฟบอทตัวนี้ เพราะการตั้ง endpoint ผิดคืน 200 เหมือนกัน
+อาการเดียวที่ได้คือบอทเงียบ
+
 คราวนี้ URL นิ่งถาวร ไม่ต้องแก้ทุกครั้งเหมือนตอนใช้ cloudflared quick tunnel
+
+**เสร็จแล้วปิดของในเครื่อง** ไม่งั้น tunnel ยังรันค้างและ LINE ก็ไม่ได้ชี้มาแล้ว
+
+```bash
+pkill -f 'cloudflared tunnel'
+pkill -f 'uvicorn app.main:app'
+```
 
 ### 7. กัน spin-down ด้วย UptimeRobot
 
@@ -147,7 +178,7 @@ UptimeRobot → New Monitor
 |---|---|
 | Render free | $0 |
 | Typhoon (beta ฟรี) | $0 |
-| DeepInfra embeddings | ~$0.0004 ต่อคำถาม 1,000 ครั้ง |
+| Cloudflare Workers AI | $0 (ฟรี 10,000 neurons/วัน ≈ 230,000 คำถาม/วัน) |
 | UptimeRobot free | $0 |
 
 ถ้าไม่อยากเสี่ยงเรื่องโควตา 750 ชั่วโมงหรือ 0.1 CPU ตัวเลือกถัดไปคือ Render Starter $7/เดือน
@@ -165,7 +196,8 @@ git ls-files data/ | cat
 ```
 
 **`/health` ตอบ 200 แต่ถามแล้วเงียบ** — ดู log หา `warm-up query failed`
-แปลว่า `EMBED_API_KEY` ผิดหรือหมดเครดิต service จะไม่ตายแต่ตอบไม่ได้
+แปลว่า `EMBED_API_KEY` หรือ `EMBED_BASE_URL` ผิด หรือใช้ neurons เกินโควตาวันนั้น
+service จะไม่ตายแต่ตอบไม่ได้ ดูโควตาที่ dash.cloudflare.com > AI > Workers AI
 
 **บอทตอบช้ามากคำถามแรกของวัน** — service หลับไป ตรวจว่า UptimeRobot ยังเดินอยู่
 
@@ -179,7 +211,9 @@ git ls-files data/ | cat
 ```bash
 docker build -t thai-law-bot .
 docker run --rm -p 8000:8000 --memory 512m --cpus 0.1 \
-  -e EMBED_API_KEY=... -e TYPHOON_API_KEY=... \
+  -e EMBED_API_KEY=... \
+  -e EMBED_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1 \
+  -e TYPHOON_API_KEY=... \
   -e LINE_CHANNEL_SECRET=... -e LINE_CHANNEL_ACCESS_TOKEN=... \
   thai-law-bot
 ```

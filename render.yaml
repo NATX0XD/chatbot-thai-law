@@ -19,10 +19,12 @@ services:
     envVars:
       - key: EMBED_BACKEND
         value: api
-      - key: EMBED_BASE_URL
-        value: https://api.deepinfra.com/v1/openai
       - key: EMBED_API_MODEL
-        value: BAAI/bge-m3
+        value: "@cf/baai/bge-m3"
+      # https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1
+      # kept out of the file because it carries the Cloudflare account id
+      - key: EMBED_BASE_URL
+        sync: false
       # secrets: set these in the Render dashboard, never in this file
       - key: EMBED_API_KEY
         sync: false

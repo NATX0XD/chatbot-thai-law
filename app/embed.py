@@ -50,9 +50,13 @@ class ApiEmbedder:
     """A hosted BGE-M3 behind an OpenAI-compatible /embeddings endpoint."""
 
     def __init__(self):
-        if not settings.embed_api_key:
+        missing = [name for name, value in
+                   (("embed_api_key", settings.embed_api_key),
+                    ("embed_base_url", settings.embed_base_url))
+                   if not value]
+        if missing:
             raise RuntimeError(
-                "embed_backend=api but embed_api_key is empty -- set it in .env")
+                f"embed_backend=api but {' and '.join(missing)} empty -- set in .env")
         self._client = httpx.Client(
             base_url=settings.embed_base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {settings.embed_api_key}"},

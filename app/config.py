@@ -38,10 +38,16 @@ class Settings(BaseSettings):
     # "local"  sentence-transformers on CPU; what the index is built with
     # "api"    the same checkpoint hosted behind an OpenAI-compatible endpoint,
     #          so the server needs no torch and fits a 512 MB instance
+    # Whatever serves "api" must be the same checkpoint that built vectors.npy.
+    # Cloudflare Workers AI was measured at cosine 0.999999 against the local
+    # model, which is what makes reusing the index legitimate; a provider that
+    # merely hosts a model of the same name is not enough. Verify a new one with
+    # tests/test_embed_parity.py before pointing production at it.
     embed_backend: str = "local"
     embed_model: str = "BAAI/bge-m3"
-    embed_api_model: str = "BAAI/bge-m3"
-    embed_base_url: str = "https://api.deepinfra.com/v1/openai"
+    embed_api_model: str = "@cf/baai/bge-m3"
+    # https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1
+    embed_base_url: str = ""
     embed_api_key: str = ""
     embed_timeout: float = 20.0
 
