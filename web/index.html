@@ -4,22 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ผู้ช่วยกฎหมายไทย — KMUTNB</title>
+<link rel="icon" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Palette sampled from assets/profile_c.png, the bot's LINE profile picture,
+     so the web chat and the LINE account read as the same product. */
   :root {
-    --page:   #eceef1;
+    --page:   #f0ecec;
     --card:   #ffffff;
-    --ink:    #14161a;
-    --muted:  #7c828d;
-    --faint:  #a8aeb8;
-    --line:   #e6e8ec;
-    --accent: #4f46e5;
-    --accent-soft: #eef0ff;
+    --ink:    #1b1416;
+    --muted:  #857a7c;
+    --faint:  #b3a8aa;
+    --line:   #eae4e4;
+    --accent: #7a2233;          /* the maroon field of the logo */
+    --accent-2:#a5676c;         /* the muted rose of its ring */
+    --cream:  #f6e9d8;          /* the scales and the book */
+    --accent-soft: #fbf1f2;
     --warn:   #b45309;
     --warn-bg:#fffbeb;
     --ok:     #16a34a;
+    --line-green: #06c755;      /* LINE's own brand green */
     --r-lg: 20px;
     --r-md: 14px;
     --r-sm: 10px;
@@ -47,10 +53,9 @@
     display: flex; flex-direction: column; min-height: 0;
   }
   .brand { display: flex; align-items: center; gap: 9px; padding: 0 6px 14px; }
-  .brand .mark {
-    width: 26px; height: 26px; border-radius: 8px; flex: none;
-    background: linear-gradient(140deg, #7b8cff, #4f46e5 55%, #9d7bff);
-    box-shadow: 0 3px 10px rgba(79,70,229,.32);
+  .brand img {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    box-shadow: 0 3px 10px rgba(122,34,51,.28);
   }
   .brand b { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 
@@ -60,7 +65,7 @@
     border-radius: var(--r-md); padding: 9px 12px 9px 32px;
     font: inherit; font-size: 13.5px; color: var(--ink); outline: none;
   }
-  .search input:focus { border-color: #cdd1fb; background: #fff; }
+  .search input:focus { border-color: #e3c9ce; background: #fff; }
   .search svg { position: absolute; left: 11px; top: 11px; opacity: .4; }
 
   nav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
@@ -70,7 +75,7 @@
     padding: 8px 10px; font: inherit; font-size: 14px; color: #3f434b;
     cursor: pointer; text-align: left;
   }
-  nav button:hover { background: #f4f5f7; color: var(--ink); }
+  nav button:hover { background: #f7f3f3; color: var(--ink); }
   nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
   nav svg { flex: none; }
 
@@ -85,12 +90,23 @@
     color: #5c626c; cursor: pointer; text-align: left;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .hist button:hover { background: #f4f5f7; color: var(--ink); }
-  .hist button.on { background: #f0f1f4; color: var(--ink); }
+  .hist button:hover { background: #f7f3f3; color: var(--ink); }
+  .hist button.on { background: #f3eeee; color: var(--ink); }
   .hist .empty { padding: 10px; font-size: 13px; color: var(--faint); }
 
+  /* add-on-LINE call to action: the web chat is for trying the bot out, LINE is
+     where people actually keep it, so the route across has to be visible */
+  .addline {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    background: var(--line-green); color: #fff; text-decoration: none;
+    border-radius: var(--r-md); padding: 10px 12px; font-size: 13.5px; font-weight: 500;
+  }
+  .addline:hover { filter: brightness(1.06); }
+  .addline small { display: block; font-weight: 400; opacity: .85; font-size: 11.5px; }
+  .addline svg { flex: none; }
+
   .status {
-    border-top: 1px solid var(--line); margin-top: 10px; padding: 12px 10px 2px;
+    border-top: 1px solid var(--line); margin-top: 12px; padding: 12px 10px 2px;
     font-size: 12.5px; color: var(--muted); display: grid; gap: 5px;
   }
   .status div { display: flex; align-items: center; gap: 7px; }
@@ -108,9 +124,9 @@
     content: ''; position: absolute; left: 50%; bottom: -220px;
     width: 900px; height: 460px; transform: translateX(-50%);
     background:
-      radial-gradient(closest-side, rgba(125,140,255,.30), transparent 70%) -180px 40px/460px 340px no-repeat,
-      radial-gradient(closest-side, rgba(255,170,120,.24), transparent 70%)  200px 90px/420px 300px no-repeat,
-      radial-gradient(closest-side, rgba(150,235,190,.24), transparent 70%)   40px 10px/440px 320px no-repeat;
+      radial-gradient(closest-side, rgba(122,34,51,.20),  transparent 70%) -180px 40px/460px 340px no-repeat,
+      radial-gradient(closest-side, rgba(235,217,192,.55), transparent 70%)  200px 90px/420px 300px no-repeat,
+      radial-gradient(closest-side, rgba(165,103,108,.24), transparent 70%)   40px 10px/440px 320px no-repeat;
     filter: blur(38px); pointer-events: none;
   }
 
@@ -123,28 +139,33 @@
     border: 1px solid var(--line); border-radius: 999px;
     padding: 7px 14px 7px 8px; font-size: 13.5px; background: #fff;
   }
-  .model .mark { width: 20px; height: 20px; border-radius: 6px;
-    background: linear-gradient(140deg, #7b8cff, #4f46e5 60%, #9d7bff); }
+  .model img { width: 22px; height: 22px; border-radius: 50%; }
+  .topright { display: flex; align-items: center; gap: 9px; }
   .newchat {
     display: flex; align-items: center; gap: 7px;
-    background: #16181d; color: #fff; border: 0; border-radius: 999px;
+    background: #1b1416; color: #fff; border: 0; border-radius: 999px;
     padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
   }
-  .newchat:hover { background: #24272e; }
+  .newchat:hover { background: #2c2225; }
+  .lineTop {
+    display: flex; align-items: center; gap: 7px; text-decoration: none;
+    background: var(--line-green); color: #fff; border-radius: 999px;
+    padding: 9px 15px; font-size: 13.5px; font-weight: 500;
+  }
+  .lineTop:hover { filter: brightness(1.06); }
 
   .scroll { flex: 1; overflow-y: auto; position: relative; z-index: 2; }
 
   /* greeting shown when a chat is empty */
   .hero { display: grid; place-items: center; padding: 6vh 24px 0; text-align: center; }
+  /* the logo itself stands in for the reference design's gradient orb */
   .orb {
-    width: 108px; height: 108px; border-radius: 50%; margin-bottom: 26px;
-    background:
-      radial-gradient(circle at 34% 30%, #ffffff 0%, #cdd4ff 26%, #8aa0ff 52%, #5b57e8 78%, #4b3fd6 100%);
-    box-shadow: 0 18px 40px rgba(90,86,232,.30), inset -8px -10px 22px rgba(70,60,190,.35);
+    width: 112px; height: 112px; border-radius: 50%; margin-bottom: 24px;
+    box-shadow: 0 18px 40px rgba(122,34,51,.28);
   }
   .hero h1 { margin: 0; font-size: 33px; line-height: 1.42; font-weight: 700; letter-spacing: -.4px; }
   .hero h1 .g {
-    background: linear-gradient(96deg, #4f46e5, #8b5cf6 55%, #4f46e5);
+    background: linear-gradient(96deg, var(--accent), var(--accent-2) 55%, var(--accent));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .hero p { margin: 12px 0 0; color: var(--muted); font-size: 14.5px; max-width: 560px; }
@@ -189,11 +210,11 @@
   .box {
     max-width: 860px; margin: 0 auto; background: rgba(255,255,255,.82);
     backdrop-filter: blur(12px);
-    border: 1px solid #e2e4ea; border-radius: var(--r-lg);
+    border: 1px solid #eae0e1; border-radius: var(--r-lg);
     box-shadow: 0 10px 30px rgba(20,22,26,.06);
     padding: 14px 14px 11px;
   }
-  .box:focus-within { border-color: #c9cdf8; }
+  .box:focus-within { border-color: #e3c9ce; }
   .box textarea {
     width: 100%; border: 0; outline: none; resize: none; background: none;
     font: inherit; font-size: 15px; color: var(--ink); min-height: 58px; max-height: 190px;
@@ -205,8 +226,8 @@
     background: #fff; border: 1px solid var(--line); border-radius: 999px;
     padding: 7px 13px; font: inherit; font-size: 12.5px; color: #4b515b; cursor: pointer;
   }
-  .tools .pill:hover { border-color: #cdd1e6; color: var(--ink); }
-  .tools .pill.on { background: var(--accent-soft); border-color: #cdd1fb; color: var(--accent); }
+  .tools .pill:hover { border-color: #e3c9ce; color: var(--ink); }
+  .tools .pill.on { background: var(--accent-soft); border-color: #e3c9ce; color: var(--accent); }
   .tools .grow { flex: 1; }
   .send {
     width: 38px; height: 38px; border-radius: 12px; border: 0; cursor: pointer;
@@ -215,12 +236,42 @@
   .send:disabled { opacity: .4; cursor: default; }
   .hint { max-width: 860px; margin: 9px auto 0; font-size: 11.5px; color: var(--faint); text-align: center; }
 
+  /* panels behind the two informational nav items */
+  .panel { max-width: 860px; margin: 0 auto; padding: 26px 22px 6px; }
+  .panel h2 { margin: 0 0 4px; font-size: 21px; font-weight: 700; letter-spacing: -.2px; }
+  .panel .lede { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .panel h3 { margin: 22px 0 9px; font-size: 13px; font-weight: 600; color: var(--faint); }
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .qgrid button {
+    text-align: left; background: #fff; border: 1px solid var(--line);
+    border-radius: var(--r-md); padding: 12px 14px; font: inherit; font-size: 14px;
+    color: #3f434b; cursor: pointer; line-height: 1.55;
+  }
+  .qgrid button:hover { border-color: #e3c9ce; color: var(--ink); background: #fffdfd; }
+  .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 6px; }
+  .nums div {
+    background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px;
+  }
+  .nums b { display: block; font-size: 25px; font-weight: 700; letter-spacing: -.5px; }
+  .nums span { font-size: 12.5px; color: var(--muted); }
+  .acts { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: #fff; }
+  .acts div {
+    display: flex; justify-content: space-between; gap: 14px;
+    padding: 9px 14px; font-size: 13.5px; border-top: 1px solid var(--line);
+  }
+  .acts div:first-child { border-top: 0; }
+  .acts span { color: var(--faint); font-size: 12.5px; white-space: nowrap; }
+  .gap {
+    background: var(--warn-bg); border: 1px solid #f3e2b8; border-radius: var(--r-md);
+    padding: 13px 15px; font-size: 13.5px; color: #7a5310; line-height: 1.7;
+  }
+
   .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 26px 24px 0; }
   .chips button {
     background: rgba(255,255,255,.75); border: 1px solid var(--line); border-radius: 999px;
     padding: 8px 14px; font: inherit; font-size: 13px; color: #4b515b; cursor: pointer;
   }
-  .chips button:hover { border-color: #cdd1e6; color: var(--ink); }
+  .chips button:hover { border-color: #e3c9ce; color: var(--ink); }
 
   @media (max-width: 860px) {
     .app { grid-template-columns: 1fr; inset: 8px; }
@@ -233,7 +284,7 @@
 <div class="app">
 
   <aside class="side">
-    <div class="brand"><div class="mark"></div><b>ผู้ช่วยกฎหมายไทย</b></div>
+    <div class="brand"><img src="/static/logo.png" alt="" width="30" height="30"><b>ผู้ช่วยกฎหมายไทย</b></div>
 
     <div class="search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -262,6 +313,13 @@
 
     <div class="hist" id="hist"></div>
 
+    <a class="addline" id="addLine" href="#" target="_blank" rel="noopener">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 3C6.9 3 2.8 6.4 2.8 10.5c0 3.7 3.3 6.8 7.7 7.4.3.06.7.2.8.5.1.25.07.6.03.9l-.13.8c-.04.24-.19.93.82.5 1-.42 5.4-3.2 7.4-5.5 1.35-1.5 2-3 2-4.6C21.4 6.4 17.2 3 12 3z"/>
+      </svg>
+      <span>เพิ่มเพื่อนใน LINE<small>ถามจากมือถือได้ตลอด</small></span>
+    </a>
+
     <div class="status" id="status">
       <div><span class="dot"></span>กำลังตรวจสอบระบบ…</div>
     </div>
@@ -269,21 +327,30 @@
 
   <section class="main">
     <div class="top">
-      <div class="model"><div class="mark"></div><span id="modelName">Typhoon + BGE-M3</span></div>
-      <button class="newchat" id="newChat">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 5v14M5 12h14"/></svg>
-        แชทใหม่
-      </button>
+      <div class="model"><img src="/static/logo.png" alt="" width="22" height="22"><span>Typhoon + BGE-M3</span></div>
+      <div class="topright">
+        <a class="lineTop" id="lineTop" href="#" target="_blank" rel="noopener">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 3C6.9 3 2.8 6.4 2.8 10.5c0 3.7 3.3 6.8 7.7 7.4.3.06.7.2.8.5.1.25.07.6.03.9l-.13.8c-.04.24-.19.93.82.5 1-.42 5.4-3.2 7.4-5.5 1.35-1.5 2-3 2-4.6C21.4 6.4 17.2 3 12 3z"/>
+          </svg>
+          เพิ่มเพื่อน
+        </a>
+        <button class="newchat" id="newChat">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 5v14M5 12h14"/></svg>
+          แชทใหม่
+        </button>
+      </div>
     </div>
 
     <div class="scroll" id="scroll">
       <div class="hero" id="hero">
-        <div class="orb"></div>
+        <img class="orb" src="/static/logo.png" alt="โลโก้ผู้ช่วยกฎหมายไทย" width="112" height="112">
         <h1>สวัสดีครับ<br><span class="g">วันนี้อยากรู้เรื่องอะไร</span></h1>
         <p>ถามเป็นภาษาพูดได้เลย ผมค้นจากตัวบทพระราชบัญญัติจริงและอ้างเลขมาตราให้ตรวจสอบทุกคำตอบ</p>
         <div class="chips" id="chips"></div>
       </div>
+      <div class="panel" id="panel" style="display:none"></div>
       <div class="log" id="log"></div>
     </div>
 
@@ -325,10 +392,33 @@ const EXAMPLES = [
   'นายจ้างหักเงินเดือนได้ไหม',
   'บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม',
 ];
-const SCOPE =
-  'คลังข้อมูลมีเฉพาะพระราชบัญญัติและพระราชกำหนด ' +
-  'ยังไม่มีประมวลกฎหมายแพ่งและพาณิชย์ และประมวลกฎหมายอาญา ' +
-  'เรื่องเช่าบ้าน มรดก ครอบครัว และคดีอาญาทั่วไปจึงยังตอบไม่ได้ครับ';
+// grouped by the acts the corpus actually covers well, so every one of these
+// returns a real section rather than a polite refusal
+const TOPICS = [
+  ['ลูกจ้างและการทำงาน', [
+    'ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่',
+    'ทำงานครบ 3 ปี ลาพักร้อนได้กี่วัน',
+    'นายจ้างหักเงินเดือนได้ไหม',
+    'ลาออกต้องบอกล่วงหน้ากี่วัน',
+    'ทำงานล่วงเวลาได้ค่าจ้างเท่าไหร่',
+    'ลาคลอดได้กี่วัน ได้เงินไหม',
+  ]],
+  ['หนี้และการทวงหนี้', [
+    'เจ้าหนี้โทรทวงหนี้ตอนตี 1 ผิดกฎหมายไหม',
+    'เจ้าหนี้ทวงหนี้กับที่ทำงานได้ไหม',
+    'เจ้าหนี้ประจานลูกหนี้ในเฟซบุ๊กผิดไหม',
+  ]],
+  ['ข้อมูลส่วนบุคคล', [
+    'บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม',
+    'ขอให้ลบข้อมูลส่วนตัวของเราได้ไหม',
+    'ข้อมูลรั่วไหลต้องแจ้งใครภายในกี่วัน',
+  ]],
+  ['ออนไลน์และคอมพิวเตอร์', [
+    'แฮกเข้าระบบคนอื่นมีโทษอะไร',
+    'ส่งอีเมลขยะรบกวนผิดกฎหมายไหม',
+    'เอารูปคนอื่นไปตัดต่อผิดไหม',
+  ]],
+];
 
 EXAMPLES.forEach(t => {
   const b = document.createElement('button');
@@ -353,9 +443,12 @@ function save() {
 }
 function newChat() {
   current = null;
+  closePanel();
+  setNav('navNew');
   log.innerHTML = '';
   hero.style.display = 'grid';
   input.value = '';
+  input.style.height = 'auto';
   input.focus();
   renderHistory();
 }
@@ -371,6 +464,8 @@ function remember(role, text, sources) {
 }
 function openChat(chat) {
   current = chat;
+  closePanel();
+  setNav('navNew');
   hero.style.display = 'none';
   log.innerHTML = '';
   chat.messages.forEach(m => {
@@ -413,13 +508,103 @@ function renderHistory() {
   });
 }
 $('filter').oninput = renderHistory;
+
+/* ------------------------------------------------------------- nav panels */
+const panel = $('panel');
+const NAV = { navNew: null, navExamples: showExamples, navScope: showScope };
+
+// Bumped by every panel open and close. showScope() fetches before it can
+// render, and without this a click on another nav item during that fetch lets
+// the late response paint itself into whatever view replaced it.
+let panelToken = 0;
+
+function setNav(id) {
+  Object.keys(NAV).forEach(k => $(k).classList.toggle('on', k === id));
+}
+function closePanel() {
+  panelToken++;
+  panel.style.display = 'none';
+  panel.innerHTML = '';
+}
+function openPanel(id) {
+  log.innerHTML = '';
+  hero.style.display = 'none';
+  panel.style.display = 'block';
+  panel.innerHTML = '';
+  setNav(id);
+  scroll.scrollTop = 0;
+  return ++panelToken;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+function showExamples() {
+  openPanel('navExamples');   // synchronous, so no token check needed
+  const parts = [
+    '<h2>ตัวอย่างคำถาม</h2>',
+    '<p class="lede">ทุกคำถามด้านล่างอยู่ในขอบเขตที่คลังตอบได้จริง กดแล้วถามได้เลย</p>',
+  ];
+  TOPICS.forEach(([name, qs]) => {
+    parts.push(`<h3>${esc(name)}</h3><div class="qgrid">`);
+    qs.forEach(q => parts.push(`<button data-q="${esc(q)}">${esc(q)}</button>`));
+    parts.push('</div>');
+  });
+  panel.innerHTML = parts.join('');
+  panel.querySelectorAll('[data-q]').forEach(b => {
+    b.onclick = () => {
+      closePanel();
+      setNav('navNew');
+      input.value = b.dataset.q;
+      submit();
+    };
+  });
+}
+
+async function showScope() {
+  const token = openPanel('navScope');
+  panel.innerHTML = '<h2>คลังกฎหมายที่มี</h2><p class="lede">กำลังอ่านจากเซิร์ฟเวอร์…</p>';
+  try {
+    const s = await (await fetch('/stats')).json();
+    if (token !== panelToken) return;   // the user moved on while we waited
+    const rows = s.largest.map(a =>
+      `<div><span style="color:#3f434b">${esc(a.act)}</span>` +
+      `<span>${a.sections.toLocaleString()} มาตรา</span></div>`).join('');
+    panel.innerHTML =
+      '<h2>คลังกฎหมายที่มี</h2>' +
+      '<p class="lede">ตัวเลขทั้งหมดอ่านจากคลังจริงที่เซิร์ฟเวอร์โหลดอยู่ตอนนี้ ไม่ได้เขียนไว้ล่วงหน้า</p>' +
+      '<div class="nums">' +
+      `<div><b>${s.acts.toLocaleString()}</b><span>ฉบับ</span></div>` +
+      `<div><b>${s.sections.toLocaleString()}</b><span>มาตรา</span></div>` +
+      `<div><b>${s.corpus_as_of}</b><span>ข้อมูลถึง</span></div>` +
+      '</div>' +
+      '<h3>ฉบับที่มีมาตรามากที่สุด</h3>' +
+      `<div class="acts">${rows}</div>` +
+      '<h3>สิ่งที่ยังไม่มีในคลัง</h3>' +
+      '<div class="gap">คลังมีเฉพาะ<b>พระราชบัญญัติและพระราชกำหนด</b> ' +
+      'ยังไม่มีประมวลกฎหมายแพ่งและพาณิชย์ และประมวลกฎหมายอาญา<br>' +
+      'เรื่องเช่าบ้าน มรดก หย่าร้าง กู้ยืมเงินระหว่างบุคคล ลักทรัพย์ ทำร้ายร่างกาย ' +
+      'จึงยังตอบไม่ได้ ถ้าถามเรื่องพวกนี้บอทจะบอกตรง ๆ ว่าไม่มีข้อมูล ' +
+      'แทนที่จะเดาเลขมาตราให้</div>';
+  } catch (err) {
+    if (token !== panelToken) return;
+    panel.innerHTML = '<h2>คลังกฎหมายที่มี</h2>' +
+      '<div class="gap">อ่านข้อมูลจากเซิร์ฟเวอร์ไม่ได้: ' + esc(err.message) + '</div>';
+  }
+}
+
 $('newChat').onclick = newChat;
 $('navNew').onclick = newChat;
-$('navExamples').onclick = () => { newChat(); input.focus(); };
-$('navScope').onclick = () => { newChat(); bubble(SCOPE, 'bot'); hero.style.display = 'none'; };
+$('navExamples').onclick = showExamples;
+$('navScope').onclick = showScope;
 
 /* ---------------------------------------------------------------- chat */
 function bubble(text, cls) {
+  // typing into the composer while a nav panel is open starts a chat, so the
+  // panel has to get out of the way wherever the first message comes from
+  closePanel();
+  setNav('navNew');
   hero.style.display = 'none';
   const wrap = document.createElement('div');
   wrap.className = 'msg ' + (cls === 'me' ? 'me' : 'bot');
@@ -516,6 +701,11 @@ async function submit() {
 }
 
 /* ---------------------------------------------------------------- boot */
+// one place for the account link, used by the sidebar and the header button
+const LINE_URL = 'https://linevoom.line.me/user/_dWuRsNSdHGuMF5N3vpPNePRONrhD60nSt_FCXyY';
+$('addLine').href = LINE_URL;
+$('lineTop').href = LINE_URL;
+
 load();
 renderHistory();
 input.focus();

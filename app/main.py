@@ -63,6 +63,38 @@ async def health() -> dict:
     }
 
 
+_STATS: dict | None = None
+
+
+@app.get("/stats")
+async def stats() -> dict:
+    """What the corpus actually contains, for the UI to state instead of guess.
+
+    Computed by streaming the corpus once and keeping only counters -- the store
+    parses a line at a time and drops it, so this costs a file read rather than
+    the 97 MB that holding every record would. Cached, because the corpus is
+    read-only for the life of the process.
+    """
+    global _STATS
+    if _STATS is None:
+        def build() -> dict:
+            corpus = get_retriever().corpus
+            per_act: dict[str, set] = {}
+            for rec in corpus:
+                # long sections are split into parts; count the section once
+                per_act.setdefault(rec["act"], set()).add(rec["section"])
+            top = sorted(per_act.items(), key=lambda kv: -len(kv[1]))[:12]
+            return {
+                "acts": len(per_act),
+                "sections": sum(len(v) for v in per_act.values()),
+                "chunks": len(corpus),
+                "corpus_as_of": settings.corpus_as_of,
+                "largest": [{"act": a, "sections": len(s)} for a, s in top],
+            }
+        _STATS = await asyncio.to_thread(build)
+    return _STATS
+
+
 # ----------------------------------------------------------------- web chat
 
 class ChatRequest(BaseModel):
