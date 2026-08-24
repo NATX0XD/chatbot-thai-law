@@ -6,99 +6,317 @@
 <title>ผู้ช่วยกฎหมายไทย — KMUTNB</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --line: #262b36;
-    --ink: #e8eaed;
-    --muted: #9aa3b2;
-    --accent: #4ade80;
-    --user: #1f6feb;
-    --warn: #f0b429;
-    --radius: 14px;
+    --page:   #eceef1;
+    --card:   #ffffff;
+    --ink:    #14161a;
+    --muted:  #7c828d;
+    --faint:  #a8aeb8;
+    --line:   #e6e8ec;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --warn:   #b45309;
+    --warn-bg:#fffbeb;
+    --ok:     #16a34a;
+    --r-lg: 20px;
+    --r-md: 14px;
+    --r-sm: 10px;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    font-family: 'IBM Plex Sans Thai', -apple-system, sans-serif;
-    background: var(--bg); color: var(--ink);
-    display: flex; flex-direction: column; align-items: center;
-    font-size: 15px; line-height: 1.7;
+    font-family: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont,
+                 'Noto Sans Thai', 'Sarabun', sans-serif;
+    background: var(--page); color: var(--ink);
+    font-size: 15px; line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
   }
-  header {
-    width: 100%; max-width: 840px; padding: 22px 20px 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
-  .sub { color: var(--muted); font-size: 13px; }
-  .status { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
-  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-  .ok { background: var(--accent); } .off { background: #6b7280; }
 
-  main { width: 100%; max-width: 840px; flex: 1; overflow-y: auto; padding: 18px 20px 8px; }
-  .msg { margin-bottom: 18px; display: flex; }
+  /* the whole app sits in a floating window, like the reference */
+  .app {
+    position: fixed; inset: 14px;
+    display: grid; grid-template-columns: 268px 1fr; gap: 14px;
+  }
+
+  /* ---------------------------------------------------------- sidebar */
+  .side {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--r-lg); padding: 18px 14px 14px;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 0 6px 14px; }
+  .brand .mark {
+    width: 26px; height: 26px; border-radius: 8px; flex: none;
+    background: linear-gradient(140deg, #7b8cff, #4f46e5 55%, #9d7bff);
+    box-shadow: 0 3px 10px rgba(79,70,229,.32);
+  }
+  .brand b { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
+
+  .search { position: relative; margin-bottom: 14px; }
+  .search input {
+    width: 100%; border: 1px solid var(--line); background: #fbfbfc;
+    border-radius: var(--r-md); padding: 9px 12px 9px 32px;
+    font: inherit; font-size: 13.5px; color: var(--ink); outline: none;
+  }
+  .search input:focus { border-color: #cdd1fb; background: #fff; }
+  .search svg { position: absolute; left: 11px; top: 11px; opacity: .4; }
+
+  nav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+  nav button {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: none; border: 0; border-radius: var(--r-sm);
+    padding: 8px 10px; font: inherit; font-size: 14px; color: #3f434b;
+    cursor: pointer; text-align: left;
+  }
+  nav button:hover { background: #f4f5f7; color: var(--ink); }
+  nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+  nav svg { flex: none; }
+
+  .hist { flex: 1; overflow-y: auto; margin-top: 10px; padding-right: 2px; }
+  .hist h4 {
+    margin: 14px 0 4px; padding: 0 10px; font-size: 12px;
+    font-weight: 500; color: var(--faint);
+  }
+  .hist button {
+    display: block; width: 100%; background: none; border: 0;
+    border-radius: var(--r-sm); padding: 7px 10px; font: inherit; font-size: 13.5px;
+    color: #5c626c; cursor: pointer; text-align: left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .hist button:hover { background: #f4f5f7; color: var(--ink); }
+  .hist button.on { background: #f0f1f4; color: var(--ink); }
+  .hist .empty { padding: 10px; font-size: 13px; color: var(--faint); }
+
+  .status {
+    border-top: 1px solid var(--line); margin-top: 10px; padding: 12px 10px 2px;
+    font-size: 12.5px; color: var(--muted); display: grid; gap: 5px;
+  }
+  .status div { display: flex; align-items: center; gap: 7px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd0d8; flex: none; }
+  .dot.on { background: var(--ok); }
+
+  /* ---------------------------------------------------------- main */
+  .main {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--r-lg); position: relative; overflow: hidden;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  /* the soft colour wash behind the composer */
+  .main::after {
+    content: ''; position: absolute; left: 50%; bottom: -220px;
+    width: 900px; height: 460px; transform: translateX(-50%);
+    background:
+      radial-gradient(closest-side, rgba(125,140,255,.30), transparent 70%) -180px 40px/460px 340px no-repeat,
+      radial-gradient(closest-side, rgba(255,170,120,.24), transparent 70%)  200px 90px/420px 300px no-repeat,
+      radial-gradient(closest-side, rgba(150,235,190,.24), transparent 70%)   40px 10px/440px 320px no-repeat;
+    filter: blur(38px); pointer-events: none;
+  }
+
+  .top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; position: relative; z-index: 2;
+  }
+  .model {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px 7px 8px; font-size: 13.5px; background: #fff;
+  }
+  .model .mark { width: 20px; height: 20px; border-radius: 6px;
+    background: linear-gradient(140deg, #7b8cff, #4f46e5 60%, #9d7bff); }
+  .newchat {
+    display: flex; align-items: center; gap: 7px;
+    background: #16181d; color: #fff; border: 0; border-radius: 999px;
+    padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
+  }
+  .newchat:hover { background: #24272e; }
+
+  .scroll { flex: 1; overflow-y: auto; position: relative; z-index: 2; }
+
+  /* greeting shown when a chat is empty */
+  .hero { display: grid; place-items: center; padding: 6vh 24px 0; text-align: center; }
+  .orb {
+    width: 108px; height: 108px; border-radius: 50%; margin-bottom: 26px;
+    background:
+      radial-gradient(circle at 34% 30%, #ffffff 0%, #cdd4ff 26%, #8aa0ff 52%, #5b57e8 78%, #4b3fd6 100%);
+    box-shadow: 0 18px 40px rgba(90,86,232,.30), inset -8px -10px 22px rgba(70,60,190,.35);
+  }
+  .hero h1 { margin: 0; font-size: 33px; line-height: 1.42; font-weight: 700; letter-spacing: -.4px; }
+  .hero h1 .g {
+    background: linear-gradient(96deg, #4f46e5, #8b5cf6 55%, #4f46e5);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { margin: 12px 0 0; color: var(--muted); font-size: 14.5px; max-width: 560px; }
+
+  /* messages */
+  .log { padding: 20px 22px 6px; max-width: 860px; margin: 0 auto; }
+  .msg { margin-bottom: 20px; display: flex; }
   .msg.me { justify-content: flex-end; }
   .bubble {
-    max-width: 88%; padding: 12px 15px; border-radius: var(--radius);
-    background: var(--panel); border: 1px solid var(--line); white-space: pre-wrap;
+    max-width: 86%; padding: 13px 17px; border-radius: 18px;
+    background: #f6f7f9; border: 1px solid var(--line); white-space: pre-wrap;
   }
-  .msg.me .bubble { background: var(--user); border-color: var(--user); }
-  .bubble.warn { border-color: var(--warn); }
+  .msg.me .bubble {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    border-bottom-right-radius: 6px;
+  }
+  .msg.bot .bubble { border-bottom-left-radius: 6px; background: #fff; }
+  .bubble.warn { background: var(--warn-bg); border-color: #f3e2b8; }
+  .typing span {
+    display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%;
+    background: var(--faint); animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: .2s }
+  .typing span:nth-child(3) { animation-delay: .4s }
+  @keyframes blink { 0%,60%,100% { opacity: .25 } 30% { opacity: 1 } }
 
-  details { margin-top: 11px; border-top: 1px solid var(--line); padding-top: 9px; }
-  summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
-  .src { margin: 9px 0 0; padding: 9px 11px; background: #0d1016; border-radius: 9px; border: 1px solid var(--line); }
-  .src .cite { color: var(--accent); font-size: 12.5px; font-weight: 500; }
-  .src .meta { color: var(--muted); font-size: 11.5px; margin-left: 6px; }
-  .src p { margin: 5px 0 0; font-size: 13px; color: #c3c8d2; max-height: 8.5em; overflow: hidden; }
+  details { margin-top: 13px; border-top: 1px solid var(--line); padding-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: '▸ '; color: var(--faint); }
+  details[open] summary::before { content: '▾ '; }
+  .src {
+    margin: 9px 0 0; padding: 10px 12px; background: #fafbfc;
+    border-radius: var(--r-sm); border: 1px solid var(--line);
+  }
+  .src .cite { color: var(--accent); font-size: 12.5px; font-weight: 600; }
+  .src .meta { color: var(--faint); font-size: 11.5px; margin-left: 6px; }
+  .src p { margin: 5px 0 0; font-size: 13px; color: #565c66; max-height: 8.5em; overflow: hidden; }
 
-  .examples { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px 10px; max-width: 840px; width: 100%; }
-  .examples button {
-    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
-    padding: 7px 12px; border-radius: 999px; font: inherit; font-size: 12.5px; cursor: pointer;
+  /* composer */
+  .composer { padding: 8px 22px 22px; position: relative; z-index: 2; }
+  .box {
+    max-width: 860px; margin: 0 auto; background: rgba(255,255,255,.82);
+    backdrop-filter: blur(12px);
+    border: 1px solid #e2e4ea; border-radius: var(--r-lg);
+    box-shadow: 0 10px 30px rgba(20,22,26,.06);
+    padding: 14px 14px 11px;
   }
-  .examples button:hover { color: var(--ink); border-color: #3a4150; }
+  .box:focus-within { border-color: #c9cdf8; }
+  .box textarea {
+    width: 100%; border: 0; outline: none; resize: none; background: none;
+    font: inherit; font-size: 15px; color: var(--ink); min-height: 58px; max-height: 190px;
+  }
+  .box textarea::placeholder { color: var(--faint); }
+  .tools { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .tools .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fff; border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 13px; font: inherit; font-size: 12.5px; color: #4b515b; cursor: pointer;
+  }
+  .tools .pill:hover { border-color: #cdd1e6; color: var(--ink); }
+  .tools .pill.on { background: var(--accent-soft); border-color: #cdd1fb; color: var(--accent); }
+  .tools .grow { flex: 1; }
+  .send {
+    width: 38px; height: 38px; border-radius: 12px; border: 0; cursor: pointer;
+    background: var(--accent); color: #fff; display: grid; place-items: center;
+  }
+  .send:disabled { opacity: .4; cursor: default; }
+  .hint { max-width: 860px; margin: 9px auto 0; font-size: 11.5px; color: var(--faint); text-align: center; }
 
-  form { width: 100%; max-width: 840px; display: flex; gap: 10px; padding: 12px 20px 20px; border-top: 1px solid var(--line); }
-  input[type=text] {
-    flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
-    padding: 12px 15px; border-radius: var(--radius); font: inherit; outline: none;
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 26px 24px 0; }
+  .chips button {
+    background: rgba(255,255,255,.75); border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px; font: inherit; font-size: 13px; color: #4b515b; cursor: pointer;
   }
-  input[type=text]:focus { border-color: #3a4150; }
-  button[type=submit] {
-    background: var(--accent); color: #06240f; border: 0; padding: 0 22px;
-    border-radius: var(--radius); font: inherit; font-weight: 600; cursor: pointer;
+  .chips button:hover { border-color: #cdd1e6; color: var(--ink); }
+
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; inset: 8px; }
+    .side { display: none; }
+    .hero h1 { font-size: 25px; }
   }
-  button[type=submit]:disabled { opacity: .45; cursor: default; }
 </style>
 </head>
 <body>
-<header>
-  <h1>ผู้ช่วยกฎหมายไทย</h1>
-  <div class="sub">ค้นจากตัวบทพระราชบัญญัติจริง อ้างเลขมาตราทุกคำตอบ</div>
-  <div class="status" id="status"><span>กำลังตรวจสอบระบบ…</span></div>
-</header>
+<div class="app">
 
-<main id="log">
-  <div class="msg"><div class="bubble">สวัสดีครับ พิมพ์คำถามกฎหมายมาได้เลย ผมจะตอบจากตัวบทจริงและบอกเลขมาตราให้ตรวจสอบได้
+  <aside class="side">
+    <div class="brand"><div class="mark"></div><b>ผู้ช่วยกฎหมายไทย</b></div>
 
-คลังข้อมูลมีเฉพาะพระราชบัญญัติและพระราชกำหนด ยังไม่มีประมวลกฎหมายแพ่งฯ และอาญา เรื่องเช่าบ้าน มรดก ครอบครัว จึงยังตอบไม่ได้ครับ</div></div>
-</main>
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/>
+      </svg>
+      <input id="filter" type="text" placeholder="ค้นประวัติการถาม" autocomplete="off">
+    </div>
 
-<div class="examples" id="examples"></div>
+    <nav>
+      <button id="navNew" class="on">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/></svg>
+        แชทใหม่
+      </button>
+      <button id="navExamples">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+        ตัวอย่างคำถาม
+      </button>
+      <button id="navScope">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/></svg>
+        คลังกฎหมายที่มี
+      </button>
+    </nav>
 
-<form id="form">
-  <input type="text" id="q" placeholder="เช่น ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่" autocomplete="off">
-  <button type="submit" id="send">ถาม</button>
-</form>
+    <div class="hist" id="hist"></div>
+
+    <div class="status" id="status">
+      <div><span class="dot"></span>กำลังตรวจสอบระบบ…</div>
+    </div>
+  </aside>
+
+  <section class="main">
+    <div class="top">
+      <div class="model"><div class="mark"></div><span id="modelName">Typhoon + BGE-M3</span></div>
+      <button class="newchat" id="newChat">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M12 5v14M5 12h14"/></svg>
+        แชทใหม่
+      </button>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <div class="hero" id="hero">
+        <div class="orb"></div>
+        <h1>สวัสดีครับ<br><span class="g">วันนี้อยากรู้เรื่องอะไร</span></h1>
+        <p>ถามเป็นภาษาพูดได้เลย ผมค้นจากตัวบทพระราชบัญญัติจริงและอ้างเลขมาตราให้ตรวจสอบทุกคำตอบ</p>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="composer">
+      <form class="box" id="form">
+        <textarea id="q" rows="1" placeholder="พิมพ์คำถามกฎหมาย เช่น ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"></textarea>
+        <div class="tools">
+          <button type="button" class="pill" id="tSearch" title="ข้ามการเรียบเรียงคำตอบ แสดงเฉพาะตัวบทที่ค้นเจอ">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+            ค้นตัวบทอย่างเดียว
+          </button>
+          <button type="button" class="pill" id="tSources" title="เปิดกล่องตัวบทอ้างอิงไว้เสมอ">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/></svg>
+            กางตัวบทอัตโนมัติ
+          </button>
+          <span class="grow"></span>
+          <button type="submit" class="send" id="send" title="ส่ง (Enter)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+      </form>
+      <div class="hint">คำตอบอ้างอิงตัวบทจริง แต่ไม่ใช่คำปรึกษาทางกฎหมาย เรื่องสำคัญควรตรวจกับนักกฎหมาย</div>
+    </div>
+  </section>
+</div>
 
 <script>
-const log = document.getElementById('log');
-const form = document.getElementById('form');
-const input = document.getElementById('q');
-const send = document.getElementById('send');
+const $ = id => document.getElementById(id);
+const scroll = $('scroll'), log = $('log'), hero = $('hero');
+const form = $('form'), input = $('q'), send = $('send');
 
 const EXAMPLES = [
   'ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่',
@@ -107,88 +325,212 @@ const EXAMPLES = [
   'นายจ้างหักเงินเดือนได้ไหม',
   'บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม',
 ];
+const SCOPE =
+  'คลังข้อมูลมีเฉพาะพระราชบัญญัติและพระราชกำหนด ' +
+  'ยังไม่มีประมวลกฎหมายแพ่งและพาณิชย์ และประมวลกฎหมายอาญา ' +
+  'เรื่องเช่าบ้าน มรดก ครอบครัว และคดีอาญาทั่วไปจึงยังตอบไม่ได้ครับ';
 
-const box = document.getElementById('examples');
 EXAMPLES.forEach(t => {
   const b = document.createElement('button');
   b.textContent = t;
-  b.onclick = () => { input.value = t; form.requestSubmit(); };
-  box.appendChild(b);
+  b.onclick = () => { input.value = t; submit(); };
+  $('chips').appendChild(b);
 });
 
+/* ---------------------------------------------------------------- history
+   Kept in localStorage: the server holds no session, so a reload would
+   otherwise lose the conversation the user is reading. */
+const KEY = 'thai-law-chats';
+let chats = [];
+let current = null;
+
+function load() {
+  try { chats = JSON.parse(localStorage.getItem(KEY)) || []; } catch { chats = []; }
+}
+function save() {
+  // keep the store bounded; 60 conversations is far more than anyone scrolls
+  localStorage.setItem(KEY, JSON.stringify(chats.slice(0, 60)));
+}
+function newChat() {
+  current = null;
+  log.innerHTML = '';
+  hero.style.display = 'grid';
+  input.value = '';
+  input.focus();
+  renderHistory();
+}
+function remember(role, text, sources) {
+  if (!current) {
+    current = { id: Date.now(), title: text.slice(0, 60), ts: Date.now(), messages: [] };
+    chats.unshift(current);
+  }
+  current.messages.push({ role, text, sources: sources || null });
+  current.ts = Date.now();
+  save();
+  renderHistory();
+}
+function openChat(chat) {
+  current = chat;
+  hero.style.display = 'none';
+  log.innerHTML = '';
+  chat.messages.forEach(m => {
+    const b = bubble(m.text, m.role === 'user' ? 'me' : (m.warn ? 'warn' : 'bot'));
+    if (m.sources) addSources(b, m.sources);
+  });
+  renderHistory();
+}
+function groupOf(ts) {
+  const days = (Date.now() - ts) / 86400000;
+  if (days < 1) return 'วันนี้';
+  if (days < 7) return '7 วันที่ผ่านมา';
+  return 'ก่อนหน้านี้';
+}
+function renderHistory() {
+  const box = $('hist');
+  const needle = $('filter').value.trim().toLowerCase();
+  const list = chats.filter(c => !needle || c.title.toLowerCase().includes(needle));
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="empty">' +
+      (needle ? 'ไม่พบประวัติที่ตรงกับคำค้น' : 'ยังไม่มีประวัติการถาม') + '</div>';
+    return;
+  }
+  let group = '';
+  list.forEach(c => {
+    const g = groupOf(c.ts);
+    if (g !== group) {
+      group = g;
+      const h = document.createElement('h4');
+      h.textContent = g;
+      box.appendChild(h);
+    }
+    const b = document.createElement('button');
+    b.textContent = c.title;
+    b.title = c.title;
+    if (current && c.id === current.id) b.className = 'on';
+    b.onclick = () => openChat(c);
+    box.appendChild(b);
+  });
+}
+$('filter').oninput = renderHistory;
+$('newChat').onclick = newChat;
+$('navNew').onclick = newChat;
+$('navExamples').onclick = () => { newChat(); input.focus(); };
+$('navScope').onclick = () => { newChat(); bubble(SCOPE, 'bot'); hero.style.display = 'none'; };
+
+/* ---------------------------------------------------------------- chat */
 function bubble(text, cls) {
+  hero.style.display = 'none';
   const wrap = document.createElement('div');
-  wrap.className = 'msg' + (cls === 'me' ? ' me' : '');
+  wrap.className = 'msg ' + (cls === 'me' ? 'me' : 'bot');
   const b = document.createElement('div');
   b.className = 'bubble' + (cls === 'warn' ? ' warn' : '');
   b.textContent = text;
   wrap.appendChild(b);
   log.appendChild(wrap);
-  log.scrollTop = log.scrollHeight;
+  scroll.scrollTop = scroll.scrollHeight;
   return b;
 }
-
-function addSources(bubbleEl, sources) {
+function typing() {
+  const b = bubble('', 'bot');
+  b.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+  return b;
+}
+function addSources(el, sources) {
   if (!sources || !sources.length) return;
   const d = document.createElement('details');
+  if ($('tSources').classList.contains('on')) d.open = true;
   const s = document.createElement('summary');
-  s.textContent = `ตัวบทที่ใช้ตอบ ${sources.length} มาตรา (กดเพื่อตรวจสอบ)`;
+  s.textContent = `ตัวบทที่ใช้ตอบ ${sources.length} มาตรา`;
   d.appendChild(s);
   sources.forEach(src => {
-    const el = document.createElement('div');
-    el.className = 'src';
-    el.innerHTML = `<span class="cite"></span><span class="meta"></span><p></p>`;
-    el.querySelector('.cite').textContent = src.citation;
-    el.querySelector('.meta').textContent =
-      `score ${src.score}` +
-      (src.bm25_rank !== null ? ` · BM25 #${src.bm25_rank + 1}` : '') +
-      (src.dense_rank !== null ? ` · dense #${src.dense_rank + 1}` : '');
-    el.querySelector('p').textContent = src.text;
-    d.appendChild(el);
+    const row = document.createElement('div');
+    row.className = 'src';
+    row.innerHTML = '<span class="cite"></span><span class="meta"></span><p></p>';
+    row.querySelector('.cite').textContent = src.citation;
+    row.querySelector('.meta').textContent =
+      (src.dense !== undefined ? `ความคล้าย ${src.dense}` : `score ${src.score}`) +
+      (src.dense_rank != null ? ` · dense #${src.dense_rank + 1}` : '') +
+      (src.bm25_rank != null ? ` · BM25 #${src.bm25_rank + 1}` : '');
+    row.querySelector('p').textContent = src.text;
+    d.appendChild(row);
   });
-  bubbleEl.appendChild(d);
+  el.appendChild(d);
 }
 
-form.onsubmit = async (e) => {
-  e.preventDefault();
+// the two pills are modes, not decorations
+$('tSearch').onclick = () => $('tSearch').classList.toggle('on');
+$('tSources').onclick = () => $('tSources').classList.toggle('on');
+
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 190) + 'px';
+});
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+form.onsubmit = e => { e.preventDefault(); submit(); };
+
+async function submit() {
   const q = input.value.trim();
-  if (!q) return;
+  if (!q || send.disabled) return;
+  const retrievalOnly = $('tSearch').classList.contains('on');
+
   bubble(q, 'me');
+  remember('user', q);
   input.value = '';
+  input.style.height = 'auto';
   send.disabled = true;
-  const pending = bubble('กำลังค้นตัวบท…');
+  const pending = typing();
+
   try {
-    const res = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q }),
-    });
-    const data = await res.json();
-    pending.textContent = data.answer;
-    if (!data.in_scope) pending.classList.add('warn');
-    addSources(pending, data.sources);
+    if (retrievalOnly) {
+      const res = await fetch('/search?k=6&q=' + encodeURIComponent(q));
+      const d = await res.json();
+      pending.textContent = d.hits.length
+        ? `พบตัวบทที่เกี่ยวข้อง ${d.hits.length} มาตรา (ความคล้ายสูงสุด ${d.max_dense})`
+        : 'ไม่พบตัวบทที่เกี่ยวข้อง';
+      if (!d.in_scope) pending.classList.add('warn');
+      addSources(pending, d.hits);
+      remember('bot', pending.textContent, d.hits);
+    } else {
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      const d = await res.json();
+      pending.textContent = d.answer;
+      if (!d.in_scope) pending.classList.add('warn');
+      addSources(pending, d.sources);
+      remember('bot', d.answer, d.sources);
+    }
   } catch (err) {
-    pending.textContent = 'เชื่อมต่อไม่ได้: ' + err.message;
+    pending.textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ' + err.message;
     pending.classList.add('warn');
   } finally {
     send.disabled = false;
     input.focus();
-    log.scrollTop = log.scrollHeight;
+    scroll.scrollTop = scroll.scrollHeight;
   }
-};
+}
+
+/* ---------------------------------------------------------------- boot */
+load();
+renderHistory();
+input.focus();
 
 fetch('/health').then(r => r.json()).then(h => {
-  const el = document.getElementById('status');
-  const pill = (ok, label) =>
-    `<span><span class="dot ${ok ? 'ok' : 'off'}"></span>${label}</span>`;
-  el.innerHTML =
-    pill(true, `${h.chunks.toLocaleString()} มาตรา`) +
-    pill(h.dense_index, 'ค้นเชิงความหมาย') +
-    pill(h.llm_configured, 'Typhoon') +
-    pill(h.line_configured, 'LINE') +
-    `<span>ข้อมูลถึง ${h.corpus_as_of}</span>`;
+  const row = (ok, label) =>
+    `<div><span class="dot ${ok ? 'on' : ''}"></span>${label}</div>`;
+  $('status').innerHTML =
+    row(true, `${h.chunks.toLocaleString()} มาตราในคลัง`) +
+    row(h.dense_index, 'ค้นเชิงความหมาย') +
+    row(h.llm_configured, 'Typhoon เชื่อมต่อแล้ว') +
+    row(h.line_configured, 'LINE เชื่อมต่อแล้ว') +
+    `<div><span class="dot on"></span>ข้อมูลถึง ${h.corpus_as_of}</div>`;
 }).catch(() => {
-  document.getElementById('status').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
+  $('status').innerHTML = '<div><span class="dot"></span>เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</div>';
 });
 </script>
 </body>
