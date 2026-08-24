@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; }
+  body { background:#fff; }
+  .sheet { display:flex; }
+  svg { display:block; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<!-- A: scales of justice, deep indigo -->
+<svg id="a" width="640" height="640" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#223C69"/><stop offset="1" stop-color="#141F38"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="640" fill="url(#bgA)"/>
+  <g stroke="#F2C75C" stroke-width="15" stroke-linecap="round" fill="none">
+    <!-- post -->
+    <path d="M320 196 V 452"/>
+    <!-- beam -->
+    <path d="M158 224 H 482"/>
+    <!-- hangers -->
+    <path d="M158 224 L 106 322 M158 224 L 210 322"/>
+    <path d="M482 224 L 430 322 M482 224 L 534 322"/>
+    <!-- base -->
+    <path d="M232 470 H 408"/>
+    <path d="M320 452 L 268 470 M320 452 L 372 470"/>
+  </g>
+  <!-- pans -->
+  <path d="M92 316 A 72 62 0 0 0 224 316 Z" fill="#F2C75C"/>
+  <path d="M416 316 A 72 62 0 0 0 548 316 Z" fill="#F2C75C"/>
+  <!-- top knob -->
+  <circle cx="320" cy="186" r="26" fill="#F2C75C"/>
+</svg>
+
+<!-- B: gavel + speech bubble, warm -->
+<svg id="b" width="640" height="640" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="640" fill="#0E4F45"/>
+  <!-- speech bubble -->
+  <path d="M112 150 h416 a44 44 0 0 1 44 44 v212 a44 44 0 0 1 -44 44 h-186 l-96 84 v-84 h-134 a44 44 0 0 1 -44 -44 v-212 a44 44 0 0 1 44 -44 z"
+        fill="#F5EFE2"/>
+  <!-- balance inside bubble -->
+  <g stroke="#0E4F45" stroke-width="17" stroke-linecap="round" fill="none">
+    <path d="M320 232 V 392"/>
+    <path d="M204 258 H 436"/>
+    <path d="M204 258 L 168 322 M204 258 L 240 322"/>
+    <path d="M436 258 L 400 322 M436 258 L 472 322"/>
+    <path d="M256 400 H 384"/>
+  </g>
+  <path d="M158 318 A 50 44 0 0 0 250 318 Z" fill="#0E4F45"/>
+  <path d="M390 318 A 50 44 0 0 0 482 318 Z" fill="#0E4F45"/>
+  <circle cx="320" cy="226" r="19" fill="#0E4F45"/>
+</svg>
+
+<!-- C: book + scale, minimal cream on maroon -->
+<svg id="c" width="640" height="640" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="640" fill="#7A2233"/>
+  <circle cx="320" cy="320" r="252" fill="none" stroke="#F6E9D8" stroke-width="10" opacity="0.35"/>
+  <!-- open book -->
+  <path d="M320 452 C 268 418 200 410 148 416 V 262 C 200 256 268 264 320 298 Z" fill="#F6E9D8"/>
+  <path d="M320 452 C 372 418 440 410 492 416 V 262 C 440 256 372 264 320 298 Z" fill="#EBD9C0"/>
+  <path d="M320 298 V 452" stroke="#7A2233" stroke-width="12" stroke-linecap="round"/>
+  <!-- scale above -->
+  <g stroke="#F6E9D8" stroke-width="14" stroke-linecap="round" fill="none">
+    <path d="M320 158 V 268"/>
+    <path d="M222 186 H 418"/>
+    <path d="M222 186 L 194 232 M222 186 L 250 232"/>
+    <path d="M418 186 L 390 232 M418 186 L 446 232"/>
+  </g>
+  <path d="M186 230 A 40 34 0 0 0 258 230 Z" fill="#F6E9D8"/>
+  <path d="M382 230 A 40 34 0 0 0 454 230 Z" fill="#F6E9D8"/>
+  <circle cx="320" cy="154" r="18" fill="#F6E9D8"/>
+</svg>
+
+</div>
+</body>
+</html>

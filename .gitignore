@@ -1,0 +1,22 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# ข้อมูลใหญ่ — ไม่ commit แต่ทำซ้ำได้ด้วยสคริปต์ใน ingest/
+data/raw/
+data/index/*
+data/processed/*.jsonl
+data/processed/*.csv
+
+# ...ยกเว้นสามไฟล์ที่ตอนเสิร์ฟต้องใช้ Render build image จาก git จึงต้องมีใน repo
+# (127 MB รวมกัน ต่ำกว่าลิมิต 100 MB ต่อไฟล์ของ GitHub ทุกไฟล์)
+!data/processed/corpus.jsonl
+!data/index/vectors.npy
+!data/index/bm25_compact.npz
+!data/index/bm25_vocab.json
+
+# bm25.pkl เป็นของ build เท่านั้น 31 MB และกินแรม 202 MB ตอนโหลด
+data/index/bm25.pkl

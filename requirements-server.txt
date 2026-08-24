@@ -1,0 +1,23 @@
+# Serving dependencies only. See requirements.txt for the full set used to build
+# the index and the reports.
+#
+# torch, sentence-transformers, rank-bm25 and pythainlp are deliberately absent:
+#   torch + BGE-M3      ~1.4 GB resident, and ~30 s to load -- longer than a LINE
+#                       reply token lives. Queries are embedded through the same
+#                       checkpoint hosted remotely instead (app/embed.py).
+#   rank-bm25           its fitted model costs 202 MB resident; the same postings
+#                       as numpy arrays cost 8 MB (app/bm25_lite.py).
+#   pythainlp           `import pythainlp` alone costs 266 MB; only the newmm
+#                       tokenizer is needed and it is vendored in
+#                       app/thai_tokenize/ under its Apache-2.0 licence.
+#
+# Measured peak on this set: 269 MB, against a 512 MB instance.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+httpx==0.28.1
+openai==1.59.6
+python-dotenv==1.0.1
+numpy==2.2.1

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ผู้ช่วยกฎหมายไทย — KMUTNB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #262b36;
+    --ink: #e8eaed;
+    --muted: #9aa3b2;
+    --accent: #4ade80;
+    --user: #1f6feb;
+    --warn: #f0b429;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: 'IBM Plex Sans Thai', -apple-system, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 15px; line-height: 1.7;
+  }
+  header {
+    width: 100%; max-width: 840px; padding: 22px 20px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .status { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .ok { background: var(--accent); } .off { background: #6b7280; }
+
+  main { width: 100%; max-width: 840px; flex: 1; overflow-y: auto; padding: 18px 20px 8px; }
+  .msg { margin-bottom: 18px; display: flex; }
+  .msg.me { justify-content: flex-end; }
+  .bubble {
+    max-width: 88%; padding: 12px 15px; border-radius: var(--radius);
+    background: var(--panel); border: 1px solid var(--line); white-space: pre-wrap;
+  }
+  .msg.me .bubble { background: var(--user); border-color: var(--user); }
+  .bubble.warn { border-color: var(--warn); }
+
+  details { margin-top: 11px; border-top: 1px solid var(--line); padding-top: 9px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+  .src { margin: 9px 0 0; padding: 9px 11px; background: #0d1016; border-radius: 9px; border: 1px solid var(--line); }
+  .src .cite { color: var(--accent); font-size: 12.5px; font-weight: 500; }
+  .src .meta { color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+  .src p { margin: 5px 0 0; font-size: 13px; color: #c3c8d2; max-height: 8.5em; overflow: hidden; }
+
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px 10px; max-width: 840px; width: 100%; }
+  .examples button {
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+    padding: 7px 12px; border-radius: 999px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  .examples button:hover { color: var(--ink); border-color: #3a4150; }
+
+  form { width: 100%; max-width: 840px; display: flex; gap: 10px; padding: 12px 20px 20px; border-top: 1px solid var(--line); }
+  input[type=text] {
+    flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    padding: 12px 15px; border-radius: var(--radius); font: inherit; outline: none;
+  }
+  input[type=text]:focus { border-color: #3a4150; }
+  button[type=submit] {
+    background: var(--accent); color: #06240f; border: 0; padding: 0 22px;
+    border-radius: var(--radius); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button[type=submit]:disabled { opacity: .45; cursor: default; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ผู้ช่วยกฎหมายไทย</h1>
+  <div class="sub">ค้นจากตัวบทพระราชบัญญัติจริง อ้างเลขมาตราทุกคำตอบ</div>
+  <div class="status" id="status"><span>กำลังตรวจสอบระบบ…</span></div>
+</header>
+
+<main id="log">
+  <div class="msg"><div class="bubble">สวัสดีครับ พิมพ์คำถามกฎหมายมาได้เลย ผมจะตอบจากตัวบทจริงและบอกเลขมาตราให้ตรวจสอบได้
+
+คลังข้อมูลมีเฉพาะพระราชบัญญัติและพระราชกำหนด ยังไม่มีประมวลกฎหมายแพ่งฯ และอาญา เรื่องเช่าบ้าน มรดก ครอบครัว จึงยังตอบไม่ได้ครับ</div></div>
+</main>
+
+<div class="examples" id="examples"></div>
+
+<form id="form">
+  <input type="text" id="q" placeholder="เช่น ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่" autocomplete="off">
+  <button type="submit" id="send">ถาม</button>
+</form>
+
+<script>
+const log = document.getElementById('log');
+const form = document.getElementById('form');
+const input = document.getElementById('q');
+const send = document.getElementById('send');
+
+const EXAMPLES = [
+  'ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่',
+  'ทำงานครบ 3 ปี ลาพักร้อนได้กี่วัน',
+  'เจ้าหนี้โทรทวงหนี้ตอนตี 1 ผิดกฎหมายไหม',
+  'นายจ้างหักเงินเดือนได้ไหม',
+  'บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม',
+];
+
+const box = document.getElementById('examples');
+EXAMPLES.forEach(t => {
+  const b = document.createElement('button');
+  b.textContent = t;
+  b.onclick = () => { input.value = t; form.requestSubmit(); };
+  box.appendChild(b);
+});
+
+function bubble(text, cls) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg' + (cls === 'me' ? ' me' : '');
+  const b = document.createElement('div');
+  b.className = 'bubble' + (cls === 'warn' ? ' warn' : '');
+  b.textContent = text;
+  wrap.appendChild(b);
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+  return b;
+}
+
+function addSources(bubbleEl, sources) {
+  if (!sources || !sources.length) return;
+  const d = document.createElement('details');
+  const s = document.createElement('summary');
+  s.textContent = `ตัวบทที่ใช้ตอบ ${sources.length} มาตรา (กดเพื่อตรวจสอบ)`;
+  d.appendChild(s);
+  sources.forEach(src => {
+    const el = document.createElement('div');
+    el.className = 'src';
+    el.innerHTML = `<span class="cite"></span><span class="meta"></span><p></p>`;
+    el.querySelector('.cite').textContent = src.citation;
+    el.querySelector('.meta').textContent =
+      `score ${src.score}` +
+      (src.bm25_rank !== null ? ` · BM25 #${src.bm25_rank + 1}` : '') +
+      (src.dense_rank !== null ? ` · dense #${src.dense_rank + 1}` : '');
+    el.querySelector('p').textContent = src.text;
+    d.appendChild(el);
+  });
+  bubbleEl.appendChild(d);
+}
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (!q) return;
+  bubble(q, 'me');
+  input.value = '';
+  send.disabled = true;
+  const pending = bubble('กำลังค้นตัวบท…');
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    const data = await res.json();
+    pending.textContent = data.answer;
+    if (!data.in_scope) pending.classList.add('warn');
+    addSources(pending, data.sources);
+  } catch (err) {
+    pending.textContent = 'เชื่อมต่อไม่ได้: ' + err.message;
+    pending.classList.add('warn');
+  } finally {
+    send.disabled = false;
+    input.focus();
+    log.scrollTop = log.scrollHeight;
+  }
+};
+
+fetch('/health').then(r => r.json()).then(h => {
+  const el = document.getElementById('status');
+  const pill = (ok, label) =>
+    `<span><span class="dot ${ok ? 'ok' : 'off'}"></span>${label}</span>`;
+  el.innerHTML =
+    pill(true, `${h.chunks.toLocaleString()} มาตรา`) +
+    pill(h.dense_index, 'ค้นเชิงความหมาย') +
+    pill(h.llm_configured, 'Typhoon') +
+    pill(h.line_configured, 'LINE') +
+    `<span>ข้อมูลถึง ${h.corpus_as_of}</span>`;
+}).catch(() => {
+  document.getElementById('status').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
+});
+</script>
+</body>
+</html>

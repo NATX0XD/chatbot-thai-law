@@ -1,0 +1,36 @@
+# Render blueprint. Create the service with New > Blueprint and point it at this
+# repository; Render reads this file instead of asking for settings in the UI.
+#
+# Free plan is 512 MB / 0.1 CPU and spins down after 15 minutes without inbound
+# traffic, waking in about a minute. A LINE reply token expires in roughly 30
+# seconds, so a cold start loses the answer -- keep an uptime monitor pinging
+# /health every 5 minutes. Render grants 750 free instance hours per workspace
+# per month and a month is at most 744, so one always-awake free service fits,
+# but only one.
+services:
+  - type: web
+    name: thai-law-bot
+    runtime: docker
+    plan: free
+    region: singapore          # closest to Thailand of Render's regions
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: EMBED_BACKEND
+        value: api
+      - key: EMBED_BASE_URL
+        value: https://api.deepinfra.com/v1/openai
+      - key: EMBED_API_MODEL
+        value: BAAI/bge-m3
+      # secrets: set these in the Render dashboard, never in this file
+      - key: EMBED_API_KEY
+        sync: false
+      - key: TYPHOON_API_KEY
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_BOT_USER_ID
+        sync: false

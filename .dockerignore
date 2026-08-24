@@ -1,0 +1,23 @@
+# keep the build context small: the raw sources alone are 383 MB and none of
+# them are read at serving time
+data/raw/
+data/processed/*
+!data/processed/corpus.jsonl
+data/index/*
+!data/index/vectors.npy
+!data/index/bm25_compact.npz
+!data/index/bm25_vocab.json
+
+.venv/
+.git/
+__pycache__/
+**/__pycache__/
+*.pyc
+report/
+ingest/
+tests/
+scripts/
+assets/
+.env
+*.pdf
+*.docx
