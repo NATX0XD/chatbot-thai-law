@@ -92,6 +92,15 @@ class Retriever:
         # pickle instead costs 202 MB against a 512 MB budget
         if os.path.exists(settings.bm25_compact_path):
             self.bm25 = BM25Lite()
+            # the compact index is derived from bm25.pkl by a separate step, so a
+            # rebuild that skipped it would leave a file that still loads cleanly
+            # and scores the previous corpus. Nothing downstream would notice:
+            # BM25 contributes ranking, not the in-scope gate, so the damage shows
+            # up only as quietly worse answers.
+            if self.bm25.n_docs != len(self.corpus):
+                raise RuntimeError(
+                    f"bm25/corpus mismatch: {self.bm25.n_docs} documents vs "
+                    f"{len(self.corpus)} chunks. Re-run ingest.build_bm25_compact.")
         else:
             with open(settings.bm25_path, "rb") as f:
                 self.bm25 = pickle.load(f)

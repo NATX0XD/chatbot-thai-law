@@ -56,17 +56,25 @@ def build_dense(corpus):
 
 
 def build_bm25(corpus):
-    from pythainlp.tokenize import word_tokenize
+    # the vendored newmm, not pythainlp's, so that the tokens fitted here are by
+    # construction the tokens the server will produce -- upgrading pythainlp on a
+    # workstation would otherwise silently shift the query side away from the index
+    from app.thai_tokenize import word_tokenize
     from rank_bm25 import BM25Okapi
 
     t0 = time.time()
-    tokens = [word_tokenize(embed_text(r), engine="newmm", keep_whitespace=False)
-              for r in corpus]
+    tokens = [word_tokenize(embed_text(r), keep_whitespace=False) for r in corpus]
     print(f"tokenised {len(tokens):,} chunks in {time.time() - t0:.0f}s")
     bm25 = BM25Okapi(tokens)
     with open(settings.bm25_path, "wb") as f:
         pickle.dump(bm25, f, protocol=pickle.HIGHEST_PROTOCOL)
     print(f"-> {settings.bm25_path} ({os.path.getsize(settings.bm25_path) / 1e6:.0f} MB)")
+
+    # chained on purpose: the compact index is what the retriever actually loads,
+    # so leaving it as a separate command to remember means the next rebuild
+    # serves the previous corpus
+    from ingest.build_bm25_compact import main as compact
+    compact()
 
 
 def main():
