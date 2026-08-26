@@ -30,6 +30,29 @@ CAPABILITIES = (
 
 GREETING = "สวัสดีครับ 👋\n\n" + CAPABILITIES
 
+# The rich menu's middle cell sends the exact string "ตัวอย่างคำถาม", so this is
+# what a tap on it produces. Grouped by topic and longer than the six lines in
+# CAPABILITIES, otherwise the cell would just repeat the welcome message. The
+# same questions back the web chat's ตัวอย่างคำถาม panel; every one of them is
+# inside the corpus, so tapping one never lands on the out-of-scope refusal.
+EXAMPLES = (
+    "ตัวอย่างคำถามที่ผมตอบได้จริง ก็อปแล้วส่งมาได้เลยครับ\n\n"
+    "🧑‍💼 ลูกจ้างและการทำงาน\n"
+    "• ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่\n"
+    "• ทำงานครบ 3 ปี ลาพักร้อนได้กี่วัน\n"
+    "• ลาออกต้องบอกล่วงหน้ากี่วัน\n"
+    "• ทำงานล่วงเวลาได้ค่าจ้างเท่าไหร่\n\n"
+    "💸 หนี้และการทวงหนี้\n"
+    "• เจ้าหนี้โทรทวงหนี้ตอนตี 1 ผิดกฎหมายไหม\n"
+    "• เจ้าหนี้ทวงหนี้กับที่ทำงานได้ไหม\n\n"
+    "🔐 ข้อมูลส่วนบุคคล\n"
+    "• บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม\n"
+    "• ข้อมูลรั่วไหลต้องแจ้งใครภายในกี่วัน\n\n"
+    "💻 ออนไลน์และคอมพิวเตอร์\n"
+    "• แฮกเข้าระบบคนอื่นมีโทษอะไร\n"
+    "• เอารูปคนอื่นไปตัดต่อผิดไหม"
+)
+
 THANKS = "ยินดีครับ ถามเพิ่มได้ตลอดเลย"
 
 # Politeness particles and punctuation that can trail a bare greeting.
@@ -39,7 +62,13 @@ TAIL = r"(?:ครับ|คร้าบ|ค่ะ|คะ|ค๊า|จ้า|�
 # "สวัสดีครับ อยากถามเรื่องเลิกจ้าง" is asking a real question with a polite
 # opener, and must reach the retrieval pipeline rather than get a canned hello.
 # Capability phrases need no anchor -- they are unambiguous wherever they appear.
+#
+# The two rich menu cells are matched first and anchored to the whole message:
+# they are literal strings LINE sends on a tap, and "ถามกฎหมาย" as free text
+# would otherwise be caught by the capability pattern below.
 ROUTES: tuple[tuple[re.Pattern, str], ...] = (
+    (re.compile(rf"^ตัวอย่างคำถาม{TAIL}$"), EXAMPLES),
+    (re.compile(rf"^ถามกฎหมาย{TAIL}$"), CAPABILITIES),
     (re.compile(rf"^(?:ขอบคุณ|ขอบใจ|thank you|thanks|thank|thx){TAIL}$", re.I), THANKS),
     (re.compile(rf"^(?:สวัสดี|หวัดดี|ดี|hello|hi|hey|ทัก){TAIL}$", re.I), GREETING),
     (re.compile(r"(ทำอะไรได้|ช่วยอะไรได้|ตอบอะไรได้|ถามอะไรได้|เก่งอะไร|"
