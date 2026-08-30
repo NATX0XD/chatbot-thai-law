@@ -33,8 +33,10 @@ GREETING = "สวัสดีครับ 👋\n\n" + CAPABILITIES
 # The rich menu's middle cell sends the exact string "ตัวอย่างคำถาม", so this is
 # what a tap on it produces. Grouped by topic and longer than the six lines in
 # CAPABILITIES, otherwise the cell would just repeat the welcome message. The
-# same questions back the web chat's ตัวอย่างคำถาม panel; every one of them is
-# inside the corpus, so tapping one never lands on the out-of-scope refusal.
+# same questions back the web chat's ตัวอย่างคำถาม panel. Each one was run against
+# the deployed bot and came back with a section from an act that governs it, so
+# tapping one never lands on a refusal -- a menu of examples that get refused is
+# worse than no menu at all.
 EXAMPLES = (
     "ตัวอย่างคำถามที่ผมตอบได้จริง ก็อปแล้วส่งมาได้เลยครับ\n\n"
     "🧑‍💼 ลูกจ้างและการทำงาน\n"
@@ -47,10 +49,10 @@ EXAMPLES = (
     "• เจ้าหนี้ทวงหนี้กับที่ทำงานได้ไหม\n\n"
     "🔐 ข้อมูลส่วนบุคคล\n"
     "• บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม\n"
+    "• ขอให้ลบข้อมูลส่วนตัวของเราได้ไหม\n"
     "• ข้อมูลรั่วไหลต้องแจ้งใครภายในกี่วัน\n\n"
-    "💻 ออนไลน์และคอมพิวเตอร์\n"
-    "• แฮกเข้าระบบคนอื่นมีโทษอะไร\n"
-    "• เอารูปคนอื่นไปตัดต่อผิดไหม"
+    "🛒 ผู้บริโภคและการขายตรง\n"
+    "• ซื้อของออนไลน์แล้วของไม่ตรงปก ร้องเรียนที่ไหน"
 )
 
 THANKS = "ยินดีครับ ถามเพิ่มได้ตลอดเลย"

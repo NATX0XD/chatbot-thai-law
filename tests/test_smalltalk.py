@@ -42,6 +42,20 @@ def test_real_questions_reach_the_pipeline(message):
     assert route(message) is None
 
 
+def test_no_example_question_falls_in_a_known_gap():
+    """The first version listed 'แฮกเข้าระบบคนอื่นมีโทษอะไร', which coverage.py
+    refuses -- the corpus has no พ.ร.บ.คอมพิวเตอร์. Suggesting a question the bot
+    then declines is worse than suggesting nothing."""
+    from app.coverage import find_gap
+
+    questions = [line.lstrip("• ").strip()
+                 for line in EXAMPLES.splitlines() if line.startswith("•")]
+    assert len(questions) >= 8
+    for q in questions:
+        gap = find_gap(q)
+        assert gap is None, f"{q!r} falls in the {gap.topic} gap"
+
+
 def test_menu_cells_say_different_things():
     """Two cells that answer identically are two cells pretending to be one."""
     assert route("ถามกฎหมาย") != route("ตัวอย่างคำถาม")
