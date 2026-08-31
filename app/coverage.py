@@ -30,6 +30,10 @@ LAWYER = ("แนะนำให้ดูตัวบทที่ krisdika.go.th
           "หรือติดต่อสภาทนายความ สายด่วน 1167 สำหรับคำปรึกษาเบื้องต้นฟรี")
 REVENUE = ("แนะนำให้ดูที่กรมสรรพากร rd.go.th หรือสายด่วน 1161 "
            "ซึ่งมีเครื่องคำนวณภาษีและคู่มือการยื่นแบบให้ด้วย")
+SOCIAL_SECURITY = (
+    "แนะนำให้ดูที่สำนักงานประกันสังคม sso.go.th หรือสายด่วน 1506\n\n"
+    "ถ้าคำถามของคุณมีเรื่องกฎหมายแรงงานปนอยู่ด้วย เช่น ค่าชดเชย วันลา หรือค่าล่วงเวลา "
+    "ลองถามแยกเฉพาะส่วนนั้น ผมตอบส่วนนั้นได้ครับ")
 
 
 @dataclass(frozen=True)
@@ -69,8 +73,10 @@ def _p(*words: str) -> re.Pattern:
 GAPS: tuple[Gap, ...] = (
     Gap("วิธีพิจารณาคดีอาญา", "ประมวลกฎหมายวิธีพิจารณาความอาญา",
         _p("แจ้งความ", "ลงบันทึกประจำวัน", "ประกันตัว", "ขอประกันตัว",
+           "ปล่อยชั่วคราว", "ปล่อยตัวชั่วคราว", "วางหลักประกัน", "หลักทรัพย์ประกัน",
            "ฝากขัง", "หมายจับ", "หมายค้น", "พนักงานสอบสวน", "ชั้นสอบสวน",
-           "สั่งฟ้อง", "สั่งไม่ฟ้อง", "อัยการ", "ยื่นฟ้องคดีอาญา")),
+           "สั่งฟ้อง", "สั่งไม่ฟ้อง", "อัยการ", "ยื่นฟ้องคดีอาญา",
+           "ศาลจะตัดสิน", "รอลงอาญา", "โอกาสชนะคดี")),
     Gap("วิธีพิจารณาคดีแพ่งและการบังคับคดี", "ประมวลกฎหมายวิธีพิจารณาความแพ่ง",
         _p("บังคับคดี", "หมายบังคับคดี", "ยึดทรัพย์", "อายัดเงินเดือน",
            "อายัดทรัพย์", "ขายทอดตลาด", "เจ้าพนักงานบังคับคดี")),
@@ -86,9 +92,25 @@ GAPS: tuple[Gap, ...] = (
            "ลดหย่อนภาษี", "ยื่นภาษี", "ยื่นแบบภาษี", "ภ\\.ง\\.ด", "ภพ\\.30",
            "เสียภาษีเท่าไหร่", "เสียภาษีเท่าไร", "คำนวณภาษี", "ภาษีเงินเดือน"),
         where=REVENUE),
+    # The widest of the rules, and the one adversarial testing forced open. The
+    # corpus has พ.ร.บ.คุ้มครองแรงงาน, which sits close to every social-security
+    # concept in embedding space, so "ถูกเลิกจ้างได้เงินทดแทนกรณีว่างงานเดือนละ
+    # เท่าไหร่" retrieved confident labour-law text, cleared the gate, cited real
+    # sections -- and the model filled the gap with a benefit figure that exists
+    # in no Thai law. Every defence passed while the answer was invented, so the
+    # vocabulary here has to cover how people describe the benefits, not just the
+    # name of the fund.
     Gap("ประกันสังคม", "พระราชบัญญัติประกันสังคม พ.ศ. 2533",
-        _p("ประกันสังคม", "ผู้ประกันตน", "มาตรา 33", "มาตรา 39", "มาตรา 40",
-           "เงินชราภาพ", "เงินว่างงาน", "สปส")),
+        _p("ประกันสังคม", "ผู้ประกันตน", "สปส", "มาตรา 33", "มาตรา 39", "มาตรา 40",
+           "เงินสมทบ", "ส่งสมทบ", "ว่างงาน", "เงินชราภาพ", "บำนาญชราภาพ",
+           "สงเคราะห์บุตร", "ทุพพลภาพ", "เงินทดแทนกรณี", "กองทุนประกันสังคม"),
+        where=SOCIAL_SECURITY),
+    # พ.ร.บ.ว่าด้วยความผิดอันเกิดจากการใช้เช็ค พ.ศ. 2534 is not in the source
+    # dataset. Without it the retriever falls back to ป.พ.พ. ลักษณะเช็ค, which is
+    # civil, and the bot told a tester that a bounced cheque "ฟ้องอาญาไม่ได้" --
+    # advice that could cost someone a criminal claim.
+    Gap("ความผิดจากการใช้เช็ค", "พระราชบัญญัติว่าด้วยความผิดอันเกิดจากการใช้เช็ค พ.ศ. 2534",
+        _p("เช็คเด้ง", "เช็คคืน", "เงินในบัญชีไม่พอ", "สั่งจ่ายเช็ค", "ธนาคารปฏิเสธการจ่ายเงิน")),
 )
 
 
@@ -97,4 +119,32 @@ def find_gap(question: str) -> Gap | None:
     for gap in GAPS:
         if gap.pattern.search(question):
             return gap
+    return None
+
+
+# Subject matter that exists only in law this corpus does not hold. Matching the
+# *question* is not enough: a question can be phrased entirely in labour-law
+# words and still be answered with social-security content, because the model
+# knows the topic and the retrieved sections look close enough to write from.
+# Two leaks found in testing did exactly that -- one invented an unemployment
+# benefit of 1,000 baht a month and attached it to พ.ร.บ.คุ้มครองแรงงาน, the
+# other explained where to claim maternity money from the social security fund.
+# Neither cited a law it had not been given, so app/verify.py had nothing to
+# catch. This reads the finished answer instead.
+BEYOND_CORPUS = (
+    (re.compile("ประกันสังคม|ผู้ประกันตน|กองทุนประกันสังคม|เงินสมทบ"),
+     "ประกันสังคม", "พระราชบัญญัติประกันสังคม พ.ศ. 2533", SOCIAL_SECURITY),
+    (re.compile("ประมวลรัษฎากร|ภาษีเงินได้บุคคล|ภาษีเงินได้นิติบุคคล|"
+                "ภาษีมูลค่าเพิ่ม|หักภาษี ณ ที่จ่าย|ภาษีหัก ณ ที่จ่าย"),
+     "ภาษีตามประมวลรัษฎากร", "ประมวลรัษฎากร", REVENUE),
+    (re.compile(r"ประมวลกฎหมายวิธีพิจารณา|ป\.วิ\.อาญา|ป\.วิ\.แพ่ง"),
+     "วิธีพิจารณาความ", "ประมวลกฎหมายวิธีพิจารณาความ", LAWYER),
+)
+
+
+def answer_beyond_corpus(answer: str) -> Gap | None:
+    """A gap the *answer* wandered into, even though the question did not name it."""
+    for pattern, topic, code, where in BEYOND_CORPUS:
+        if pattern.search(answer):
+            return Gap(topic, code, pattern, where)
     return None

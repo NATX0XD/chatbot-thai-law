@@ -107,3 +107,23 @@ def test_llm_failure_still_returns_the_sections(monkeypatch):
     assert a.error, "the failure should be reported"
     assert a.citations, "retrieval succeeded, so sections must still come back"
     assert "มาตรา" in a.text
+
+
+def test_an_answer_that_wanders_into_social_security_is_blocked(spy_llm, monkeypatch):
+    """The leak adversarial testing found, and the one no earlier guard caught.
+
+    Asked for severance and unemployment benefit in one sentence, the bot
+    answered from พ.ร.บ.คุ้มครองแรงงาน -- a real act, correctly cited -- and
+    invented a benefit of 1,000 baht a month that appears in no Thai law. The
+    citation check passed because nothing it named was fabricated; the gap was
+    in what it said, not in what it cited.
+    """
+    async def fake_complete(system, user):
+        return ("ได้ค่าชดเชยตามอายุงาน และได้รับเงินทดแทนกรณีว่างงานเดือนละ 1,000 บาท "
+                "จากกองทุนประกันสังคม (พ.ร.บ.คุ้มครองแรงงาน 2541 ม.118)")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"))
+    assert not a.in_scope
+    assert a.error == "answer beyond corpus"
+    assert "ประกันสังคม" in a.text

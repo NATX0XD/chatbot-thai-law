@@ -86,3 +86,23 @@ def test_a_code_called_by_the_wrong_kind_of_name_is_not_a_fabrication(answer):
     wrong word for what kind of statute it is misnames a real law; it does not
     invent one, and the answer it appeared in was right."""
     assert unsupported_laws(answer, ["ประมวลกฎหมายแพ่งและพาณิชย์ มาตรา 1603"]) == []
+
+
+@pytest.mark.parametrize("answer", [
+    "การเข้าถึงระบบโดยมิชอบมีโทษจำคุก (พ.ร.บ.คอมพิวเตอร์ 2550 ม.5)",
+    "ตาม พ.ร.บ.คอมพิวเตอร์ พ.ศ. 2550 มาตรา 14 ต้องระวางโทษจำคุกไม่เกินห้าปี",
+])
+def test_an_act_known_by_a_short_name_is_not_a_fabrication(answer):
+    """พ.ร.บ.คอมพิวเตอร์ is registered as ...ว่าด้วยการกระทำความผิดเกี่ยวกับ
+    คอมพิวเตอร์, so a shared-prefix test compared 'คอมพิวเตอร์' against
+    'ว่าด้วยการกระ' and blocked every answer that cited it. Adversarial testing
+    found the whole act unusable while it sat in the index."""
+    supplied = ["พระราชบัญญัติว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์ พ.ศ. 2550 มาตรา 14"]
+    assert unsupported_laws(answer, supplied) == []
+
+
+def test_matching_by_containment_still_blocks_an_unrelated_code():
+    """Containment is looser than a prefix, so the case that motivated the guard
+    has to be re-checked: a code named in the answer but never supplied."""
+    supplied = ["พระราชบัญญัติว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์ พ.ศ. 2550 มาตรา 14"]
+    assert unsupported_laws("ผิดฐานลักทรัพย์ตามประมวลกฎหมายอาญา ม.335", supplied) != []

@@ -39,6 +39,10 @@ LAW_MENTION = re.compile(
 )
 
 NOISE = re.compile(r"(พ\.?\s?ศ\.?\s*[๐-๙0-9]*|มาตรา\s*[๐-๙0-9/()]*|ม\.\s*[๐-๙0-9/()]*"
+                   # a bare year, written without the พ.ศ. the pattern above needs.
+                   # "พ.ร.บ.คอมพิวเตอร์ 2550" kept its 2550 and stopped matching
+                   # the act it names, which blocked every answer citing it.
+                   r"|(?<![๐-๙0-9])[๐-๙0-9]{4}(?![๐-๙0-9])"
                    r"|ฉบับ\s*Update.*|\(.*?\)|[\s\.\,\:\;\"“”\-–]+)")
 
 # "ตาม พ.ร.บ.นี้", "ตามพระราชบัญญัตินี้", "ตามประมวลกฎหมายนี้", "พ.ร.บ.ดังกล่าว" --
@@ -92,8 +96,33 @@ def unsupported_laws(answer: str, citations: list[str]) -> list[str]:
             continue
         if SELF_REF.match(name):
             continue
-        if any(name.startswith(a[:12]) or a.startswith(name[:12]) for a in allowed):
+        if _names_the_same_law(name, allowed):
             continue
         if raw.strip() not in bad:
             bad.append(raw.strip())
     return bad
+
+
+# how short a name may be and still be matched by containment. Codes normalise
+# to very short names -- ประมวลกฎหมายอาญา becomes "อาญา" -- and four characters
+# inside a long title is a coincidence waiting to happen, so those must match
+# exactly instead.
+MIN_CONTAINS = 6
+
+
+def _names_the_same_law(name: str, allowed: set[str]) -> bool:
+    """Is `name` one of the acts we supplied, under any of the names people use?
+
+    Containment rather than a shared prefix, because the everyday name of an act
+    is often buried in the middle of its official one. พ.ร.บ.คอมพิวเตอร์ is
+    registered as ...ว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์, so a prefix test
+    compared "คอมพิวเตอร์" against "ว่าด้วยการกระ" and blocked every answer that
+    cited it -- the whole act was unusable while sitting in the index.
+    """
+    if name in allowed:
+        return True
+    for a in allowed:
+        short, long = (name, a) if len(name) <= len(a) else (a, name)
+        if len(short) >= MIN_CONTAINS and short in long:
+            return True
+    return False

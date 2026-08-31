@@ -1,20 +1,25 @@
 # -*- coding: utf-8 -*-
 """Turn a citizen's question into a cited answer, or into an honest refusal.
 
-The refusal path matters more than the answer path. The corpus is missing every
-code (ประมวลกฎหมายแพ่งและพาณิชย์, ประมวลกฎหมายอาญา) and stops around 2563, so a
+The refusal path matters more than the answer path. The corpus stops around 2563
+and still lacks ป.วิ.แพ่ง, ป.วิ.อาญา, ประมวลรัษฎากร and พ.ร.บ.ประกันสังคม, so a
 large share of real questions genuinely cannot be answered from it. Guessing at
 those is the failure mode that hurts users.
 
-Two guards stand in front of the model, and they catch different things:
+Four guards, catching four different failures:
 
-  1. app/coverage.py -- topics whose governing code is absent. These score *high*,
-     because the retriever finds a real act on the same subject; only a rule that
-     knows what the corpus is missing can catch them.
-  2. the cosine gate -- questions nothing in the corpus resembles at all.
+  1. find_gap -- the question is about law the corpus does not hold. These score
+     *high*, because the retriever finds a real act on the same subject; only a
+     rule that knows what is missing can catch them.
+  2. the cosine gate -- nothing in the corpus resembles the question at all.
+  3. find_gap_in_answer -- the *answer* wandered into missing law even though the
+     question did not name it. Adversarial testing produced an answer that cited
+     พ.ร.บ.คุ้มครองแรงงาน correctly and then invented an unemployment benefit of
+     1,000 baht a month; guards 1, 2 and 4 all passed it.
+  4. unsupported_laws -- the answer names an act that was never supplied.
 
-Neither guard spends an LLM call, and the model is never asked to decide whether
-it should have answered.
+None of them spends an LLM call except the last two, which read what the model
+already wrote. The model is never asked whether it should have answered.
 """
 from __future__ import annotations
 
@@ -24,7 +29,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.config import settings
-from app.coverage import find_gap
+from app.coverage import answer_beyond_corpus as find_gap_in_answer, find_gap
 from app.flex import answer_message
 from app.llm import LLMUnavailable, complete
 from app.retriever import Hit, get_retriever
@@ -193,6 +198,16 @@ async def answer_question(question: str) -> Answer:
                   f"แต่พบตัวบทที่เกี่ยวข้องดังนี้\n\n{listing}"),
             citations=[h.citation for h in hits],
             hits=hits, error=str(exc))
+
+    # the answer may drift into law the corpus does not hold without ever naming
+    # it as a citation -- social security explained out of labour law is the case
+    # this was written for. Checked before the citation guard because a leak of
+    # this kind cites nothing wrong; there is simply nothing behind what it says.
+    strayed = find_gap_in_answer(text)
+    if strayed:
+        log.warning("REFUSED answer-side gap=%s | %r", strayed.topic, question[:80])
+        return Answer(text=strayed.message(), hits=hits, in_scope=False,
+                      error="answer beyond corpus")
 
     citations = [h.citation for h in hits]
     # last line of defence: the model may ignore the context and answer from its
