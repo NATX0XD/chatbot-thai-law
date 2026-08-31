@@ -66,18 +66,36 @@ class Settings(BaseSettings):
     top_k_bm25: int = 30
     top_k_final: int = 6
     rrf_k: int = 60
-    # Fusion weights. Dense carries roughly four times the signal of BM25 on Thai
-    # questions: a short query like "เจ้าหนี้ทวงหนี้ตี 1 ผิดไหม" tokenises into
-    # common words that score high on BM25 against unrelated acts, which pushed
-    # the section that answers it out of the results entirely. Measured on the
-    # probe set in ingest/tune_fusion.py, 2:1 lifts correct-act-in-top-3 from
-    # 9/12 to 11/12. BM25 still earns its place on exact vocabulary and section
-    # numbers, so it is down-weighted rather than removed.
-    weight_dense: float = 2.0
-    weight_bm25: float = 0.5
+    # Fusion weights. Dense carries far more signal than BM25 on Thai questions:
+    # a short query like "เจ้าหนี้ทวงหนี้ตี 1 ผิดไหม" tokenises into common words
+    # that score high on BM25 against unrelated acts, which pushed the section
+    # that answers it out of the results entirely.
+    #
+    # 2.0:0.5 was chosen on the twelve hand-written probes in ingest/tune_fusion.py,
+    # against a corpus that did not yet hold the codes. Re-measured with
+    # `python -m ingest.eval_retrieval --n 0 --split all --grid` over all 6,994
+    # labelled questions, best of a 32-point grid:
+    #
+    #                      hit@1  hit@3  hit@6   MRR@6
+    #   3.0:0.25 (here)    60.7%  77.0%  83.6%   0.694
+    #   2.0:0.5  (was)     59.0%  75.4%  83.7%   0.680
+    #   dense only         60.3%  76.5%  82.6%   0.689
+    #   BM25 only          44.0%  58.1%  64.9%   0.516
+    #
+    # +1.7 points of hit@1 and +1.6 of hit@3 for -0.1 of hit@6 -- the first two are
+    # ~120 questions each, the last is 7, which is noise. BM25 still earns its place:
+    # dropping it entirely costs a full point of hit@6, which is the metric that
+    # decides whether the answer is reachable at all.
+    weight_dense: float = 3.0
+    weight_bm25: float = 0.25
     # Seats reserved for the dense retriever's own best results, so a chunk it
     # ranks first cannot be pushed out by RRF. BM25 gets none: its top hit on a
     # short Thai query is frequently irrelevant.
+    #
+    # At the weights above the grid scores guarantee 0 and guarantee 2 identically
+    # -- dense already wins the top two seats on its own, so the reservation never
+    # fires. Kept anyway: it costs nothing today and is what stops a future weight
+    # change from silently evicting the best dense hit.
     guarantee_top: int = 2
     # The in-scope gate reads the raw cosine, not the fused RRF score -- RRF depends
     # on rank alone, so an off-topic question and a perfect match get the same value.

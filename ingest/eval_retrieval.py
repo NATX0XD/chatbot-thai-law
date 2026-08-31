@@ -126,6 +126,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--rerank", action="store_true",
                     help="also score a cross-encoder pass over the fused candidates")
+    ap.add_argument("--grid", action="store_true",
+                    help="score a grid of fusion weights from the same retrieval pass")
     args = ap.parse_args()
 
     r = Retriever()
@@ -144,6 +146,16 @@ def main() -> None:
     dense_only = Metric("dense only")
     bm25_only = Metric("BM25 only")
     reranked = Metric("hybrid + rerank") if args.rerank else None
+    # Retrieval is the expensive part and it is identical for every weighting, so
+    # a whole grid costs one pass. The production weights were chosen on twelve
+    # hand-written probes against a corpus that had no codes in it; this is the
+    # cheapest way to ask whether they still hold.
+    GRID = [(wd, wb, g)
+            for wd in (1.0, 1.5, 2.0, 3.0)
+            for wb in (0.0, 0.25, 0.5, 1.0)
+            for g in (0, 2)] if args.grid else []
+    grid_metrics = {cfg: Metric(f"w {cfg[0]}:{cfg[1]} guarantee {cfg[2]}")
+                    for cfg in GRID}
     refused_gate = refused_rule = 0
     rerank_seconds = 0.0
 
@@ -174,6 +186,11 @@ def main() -> None:
         dense_only.add(rank_of_gold([int(x) for x in dense[:TOP_K]], r.corpus, gold))
         bm25_only.add(rank_of_gold([int(x) for x in sparse[:TOP_K]], r.corpus, gold))
 
+        for cfg, metric in grid_metrics.items():
+            wd, wb, g = cfg
+            metric.add(rank_of_gold(fuse(dense, sparse, wd, wb, g, r.corpus),
+                                    r.corpus, gold))
+
         if reranked is not None:
             # a wider slate than the six that ship, so the cross-encoder has
             # something to promote from
@@ -198,6 +215,11 @@ def main() -> None:
     if reranked is not None:
         print(f"\nrerank cost {rerank_seconds / n:.2f}s per question "
               f"({rerank_seconds:.0f}s total)")
+
+    if grid_metrics:
+        print(f"\nfusion grid, best hit@6 first\n{'-' * 54}")
+        for m in sorted(grid_metrics.values(), key=lambda m: -m.hits[6])[:10]:
+            print(m.row())
 
     print(f"\nfalse refusals on questions the corpus can answer ({n} asked)")
     print(f"  cosine gate < {settings.min_dense_sim}      {refused_gate:>5}"

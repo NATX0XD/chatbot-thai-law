@@ -121,3 +121,24 @@ def test_a_refusal_may_name_its_missing_act_but_nothing_else(text, ok):
     means it started answering, and the fixed text is used instead."""
     from app.refuse import _unsafe
     assert (_unsafe(text, "พระราชบัญญัติประกันสังคม พ.ศ. 2533") is None) is ok
+
+
+@pytest.mark.parametrize("words,value", [
+    ("สามสิบ", 30), ("หนึ่งแสน", 100_000), ("ยี่สิบเอ็ด", 21),
+    ("หนึ่งร้อยยี่สิบ", 120), ("สองแสนห้าหมื่น", 250_000), ("สิบเอ็ด", 11),
+])
+def test_thai_number_words_parse(words, value):
+    """Statutes spell figures out -- หนึ่งแสนบาท -- while answers use digits, so
+    the two can only be compared once the statute side is expanded."""
+    from app.numbers import words_to_int
+    assert words_to_int(words) == value
+
+
+def test_a_figure_absent_from_the_sections_is_reported():
+    """The production failure: a real act, a real section, and a benefit figure
+    that appears in no Thai law."""
+    from app.numbers import unsupported_figures
+    sections = ["ลูกจ้างซึ่งทำงานติดต่อกันครบหนึ่งร้อยยี่สิบวัน ให้จ่ายไม่น้อยกว่า"
+                "ค่าจ้างอัตราสุดท้ายสามสิบวัน"]
+    assert unsupported_figures("ได้ค่าชดเชย 30 วัน เมื่อทำงานครบ 120 วัน", sections) == []
+    assert unsupported_figures("ได้เงินทดแทนเดือนละ 1,000 บาท", sections) == ["1,000 บาท"]
