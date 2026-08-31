@@ -124,6 +124,8 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=400, help="0 = every eligible question")
     ap.add_argument("--split", default="test", choices=["test", "train", "all"])
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--rerank", action="store_true",
+                    help="also score a cross-encoder pass over the fused candidates")
     args = ap.parse_args()
 
     r = Retriever()
@@ -141,7 +143,15 @@ def main() -> None:
     hybrid = Metric("hybrid (production)")
     dense_only = Metric("dense only")
     bm25_only = Metric("BM25 only")
+    reranked = Metric("hybrid + rerank") if args.rerank else None
     refused_gate = refused_rule = 0
+    rerank_seconds = 0.0
+
+    if reranked is not None:
+        from app.rerank import get_reranker
+        reranker = get_reranker()
+        print(f"reranking top {settings.rerank_candidates} with "
+              f"{settings.rerank_model}\n")
 
     t0 = time.time()
     for i, (question, gold) in enumerate(items, start=1):
@@ -164,14 +174,30 @@ def main() -> None:
         dense_only.add(rank_of_gold([int(x) for x in dense[:TOP_K]], r.corpus, gold))
         bm25_only.add(rank_of_gold([int(x) for x in sparse[:TOP_K]], r.corpus, gold))
 
+        if reranked is not None:
+            # a wider slate than the six that ship, so the cross-encoder has
+            # something to promote from
+            cand = fuse(dense, sparse, settings.weight_dense, settings.weight_bm25,
+                        settings.guarantee_top, r.corpus,
+                        top_k=settings.rerank_candidates)
+            t1 = time.time()
+            new_order = reranker.order(asked, [r.corpus[i]["text"] for i in cand])
+            rerank_seconds += time.time() - t1
+            reranked.add(rank_of_gold([cand[i] for i in new_order][:TOP_K],
+                                      r.corpus, gold))
+
         if i % 25 == 0:
             print(f"  {i}/{len(items)}  {time.time() - t0:.0f}s", flush=True)
 
     n = len(items)
     print(f"\n{'':<22} {'hit@1':>6} {'hit@3':>6} {'hit@6':>6} {'MRR@6':>8}")
     print("-" * 54)
-    for m in (hybrid, dense_only, bm25_only):
-        print(m.row())
+    for m in (hybrid, dense_only, bm25_only, reranked):
+        if m is not None:
+            print(m.row())
+    if reranked is not None:
+        print(f"\nrerank cost {rerank_seconds / n:.2f}s per question "
+              f"({rerank_seconds:.0f}s total)")
 
     print(f"\nfalse refusals on questions the corpus can answer ({n} asked)")
     print(f"  cosine gate < {settings.min_dense_sim}      {refused_gate:>5}"

@@ -78,6 +78,16 @@ class Settings(BaseSettings):
     # whether the corpus knows the answer. It still drives ranking.
     min_dense_sim: float = 0.54   # BGE-M3 cosine
 
+    # --- reranking ---
+    # Off until measured. See app/rerank.py for why, and run
+    # `python -m ingest.eval_retrieval --rerank` before turning it on.
+    rerank_enabled: bool = False
+    rerank_model: str = "@cf/baai/bge-reranker-base"
+    # how many fused candidates to send. More is more accurate and more tokens;
+    # 12 covers twice the six that reach the model.
+    rerank_candidates: int = 12
+    rerank_timeout: float = 15.0
+
     # --- answer policy ---
     corpus_as_of: str = "พ.ศ. 2563"
     max_answer_chars: int = 1800

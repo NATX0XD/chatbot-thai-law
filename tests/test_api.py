@@ -52,9 +52,9 @@ def test_search_marks_off_topic(client):
 def test_chat_refuses_a_missing_code_without_an_api_key(client):
     """No Typhoon key is configured in tests; a gap question must still answer,
     because it never reaches the model."""
-    body = client.post("/chat", json={"question": "มรดกแบ่งยังไง"}).json()
+    body = client.post("/chat", json={"question": "ขอประกันตัวต้องใช้หลักทรัพย์อะไร"}).json()
     assert body["in_scope"] is False
-    assert "ประมวลกฎหมายแพ่งและพาณิชย์" in body["answer"]
+    assert "วิธีพิจารณาความอาญา" in body["answer"]
 
 
 def test_chat_rejects_an_empty_question(client):

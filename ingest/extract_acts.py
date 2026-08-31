@@ -153,6 +153,21 @@ def main():
     print(f"acts written : {n_acts:,}")
     print(f"acts skipped : {n_skipped:,} (no parsable มาตรา -- usually a schedule or a repeal)")
     print(f"sections     : {n_sections:,}")
+
+    # the codes come from a different source and are appended to the same file:
+    # one corpus means one index, and the retriever cannot tell them apart.
+    # Chained rather than left as a separate command, because a corpus rebuilt
+    # without them would quietly go back to refusing every question about
+    # tenancy, inheritance or theft.
+    from ingest.extract_codes import write_codes
+    from ingest.extract_computer_act import write_computer_act
+    with open(OUT, "a", encoding="utf-8") as f:
+        n_codes, n_code_sections = write_codes(f)
+        # appended last, and it must stay last: the dense index can be extended
+        # instead of rebuilt only while the earlier records keep their positions
+        n_cca = write_computer_act(f)
+    print(f"codes        : {n_codes} ฉบับ, {n_code_sections:,} ชิ้น")
+    print(f"รวม          : {n_sections + n_code_sections + n_cca:,} ชิ้น")
     print(f"-> {OUT}")
 
 

@@ -29,6 +29,17 @@ IN_SCOPE = [
     ("เจ้าหนี้โทรทวงหนี้ตอนกลางคืนได้ไหม", "ทวงถามหนี้", "9"),
     ("ลูกจ้างประสบอันตรายจากการทำงาน นายจ้างต้องจ่ายอะไรบ้าง", "เงินทดแทน", None),
     ("เก็บข้อมูลส่วนบุคคลต้องขอความยินยอมไหม", "ข้อมูลส่วนบุคคล", None),
+    # the two codes, added after the Act corpus. Every one of these used to be
+    # refused by a coverage rule, because the governing text was not there.
+    ("เจ้าของบ้านยึดเงินมัดจำ ทำอะไรได้บ้าง", "แพ่งและพาณิชย์", None),
+    # no section is pinned here: มาตรา 1599, 1603, 1620 and 1629 all answer part
+    # of it, and asserting one of them would test the ranking's taste rather than
+    # whether the corpus now covers inheritance at all
+    ("พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกตกทอดแก่ใคร", "แพ่งและพาณิชย์", None),
+    ("เหตุฟ้องหย่ามีอะไรบ้าง", "แพ่งและพาณิชย์", "1516"),
+    ("กู้ยืมเงินเกินสองพันบาทต้องทำหลักฐานเป็นหนังสือไหม", "แพ่งและพาณิชย์", "653"),
+    ("ใส่ความผู้อื่นให้เสียชื่อเสียงมีความผิดอะไร", "อาญา", "326"),
+    ("ลักทรัพย์ในเวลากลางคืนมีโทษเท่าไหร่", "อาญา", "335"),
 ]
 
 
@@ -66,10 +77,15 @@ OFF_TOPIC = [
 # legal questions whose governing law is absent from this corpus. Answering these
 # from whatever the retriever scraped up is the failure mode that hurts users most,
 # so they are tested as hard as the off-topic ones.
+#
+# The list changed when the two substantive codes were added: tenancy, inheritance
+# and defamation moved into IN_SCOPE, and what is left is procedure. The criminal
+# code says what defamation is; ป.วิ.อาญา, which the corpus still lacks, says how
+# to report it and how bail works.
 MISSING_LAW = [
-    "เจ้าของบ้านยึดเงินมัดจำ ทำอะไรได้บ้าง",
-    "พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกแบ่งยังไง",
-    "โดนด่าในเฟซบุ๊ก ฟ้องหมิ่นประมาทได้ไหม",
+    "โดนโกงออนไลน์ ไปแจ้งความที่โรงพักไหนก็ได้ไหม",
+    "ขอประกันตัวในชั้นสอบสวนต้องใช้หลักทรัพย์เท่าไหร่",
+    "ศาลตัดสินแล้วลูกหนี้ไม่จ่าย จะยึดทรัพย์บังคับคดียังไง",
 ]
 
 

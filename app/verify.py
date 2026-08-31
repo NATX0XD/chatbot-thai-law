@@ -40,6 +40,14 @@ LAW_MENTION = re.compile(
 
 NOISE = re.compile(r"(พ\.?\s?ศ\.?\s*[๐-๙0-9]*|มาตรา\s*[๐-๙0-9/()]*|ม\.\s*[๐-๙0-9/()]*"
                    r"|ฉบับ\s*Update.*|\(.*?\)|[\s\.\,\:\;\"“”\-–]+)")
+
+# "ตาม พ.ร.บ.นี้", "ตามพระราชบัญญัตินี้", "ตามประมวลกฎหมายนี้", "พ.ร.บ.ดังกล่าว" --
+# the model pointing back at a statute it was already given, not naming a new one.
+# The pattern above reads them as titles, and a user watching the bot throw away a
+# correct answer about สิทธิผู้บริโภค is how this was found: the reply cited
+# พ.ร.บ.คุ้มครองผู้บริโภค correctly, then wrote "ตาม พ.ร.บ.นี้" and the guard
+# blocked the whole thing as fabricated.
+SELF_REF = re.compile(r"^(?:ประมวล)?(?:นี้|ดังกล่าว|ฉบับนี้|ข้างต้น|เดียวกัน)")
 ABBREV = (("พระราชบัญญัติ", ""), ("พระราชกำหนด", ""),
           ("พรบ", ""), ("พรก", ""), ("ประมวลกฎหมาย", "ประมวล"), ("ประมวลรัษฎากร", "ประมวลรัษฎากร"))
 
@@ -76,6 +84,8 @@ def unsupported_laws(answer: str, citations: list[str]) -> list[str]:
     for raw in LAW_MENTION.findall(answer):
         name = normalise(raw)
         if len(name) < 4:
+            continue
+        if SELF_REF.match(name):
             continue
         if any(name.startswith(a[:12]) or a.startswith(name[:12]) for a in allowed):
             continue

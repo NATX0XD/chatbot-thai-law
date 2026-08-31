@@ -62,11 +62,41 @@ GLOSSARY: tuple[tuple[str, str], ...] = (
      "ลูกจ้างประสบอันตรายเนื่องจากการทำงาน เงินทดแทน"),
 
     # --- หนี้ ---
+    # The next two carry a context requirement, and they are the reason the
+    # third element exists at all. "กลางคืน" meant debt collection at night until
+    # ประมวลกฎหมายอาญา entered the corpus; now it also appears in มาตรา 335(1),
+    # ลักทรัพย์ในเวลากลางคืน, and the unconditional rule dragged that question to
+    # พ.ร.บ.การทวงถามหนี้ ม.9. Same for "ด่า" and "ประจาน", which are how people
+    # describe หมิ่นประมาท. Both now fire only when the question is about debt.
     (r"ทวงหนี้|ตามหนี้|โทรทวง|ทวงเงิน", "การทวงถามหนี้ ผู้ทวงถามหนี้"),
     (r"ตี\s*\d|ดึก|กลางคืน|เช้ามืด|ตอนนอน",
-     "เวลาในการติดต่อทวงถามหนี้ วันเวลาที่ห้ามทวงถาม"),
+     "เวลาในการติดต่อทวงถามหนี้ วันเวลาที่ห้ามทวงถาม",
+     r"ทวง|หนี้|เจ้าหนี้|ลูกหนี้|ค้างชำระ"),
     (r"ข่มขู่|ด่า|ประจาน|ทำให้อาย|ไปบอกที่ทำงาน|บอกคนอื่น",
-     "การทวงถามหนี้ในลักษณะข่มขู่ ดูหมิ่น เปิดเผยความเป็นหนี้แก่ผู้อื่น"),
+     "การทวงถามหนี้ในลักษณะข่มขู่ ดูหมิ่น เปิดเผยความเป็นหนี้แก่ผู้อื่น",
+     r"ทวง|หนี้|เจ้าหนี้|ลูกหนี้|ค้างชำระ"),
+
+    # --- ประมวลกฎหมายอาญา ---
+    # Everyday words for offences, mapped to the statutory ones. The corpus only
+    # gained these when the code was added, so nothing here existed before.
+    (r"ขโมย|ลักขโมย|ยกเค้า|ขโมยของ|โจร", "ลักทรัพย์"),
+    (r"ด่า|ประจาน|ใส่ร้าย|พูดให้เสียหาย|โพสต์ด่า",
+     "หมิ่นประมาท ใส่ความผู้อื่นต่อบุคคลที่สาม ดูหมิ่นซึ่งหน้า"),
+    (r"โกงเงิน|หลอกโอนเงิน|หลอกลวง|ต้มตุ๋น|แชร์ลูกโซ่",
+     "ฉ้อโกง หลอกลวงด้วยการแสดงข้อความอันเป็นเท็จ"),
+    (r"ตีกัน|ต่อย|ชกต่อย|ทุบตี|ทำร้าย", "ทำร้ายร่างกาย อันตรายสาหัส"),
+    (r"บุกรุก|เข้าบ้านโดยไม่ได้รับอนุญาต", "บุกรุกอสังหาริมทรัพย์"),
+
+    # --- ประมวลกฎหมายแพ่งและพาณิชย์ ---
+    (r"ยืมเงิน|ให้ยืมเงิน|กู้เงิน|สัญญาเงินกู้|หนี้นอกระบบ",
+     "กู้ยืมเงิน ยืมใช้สิ้นเปลือง หลักฐานแห่งการกู้ยืมเป็นหนังสือ"),
+    (r"ค้ำประกัน|ผู้ค้ำ", "ค้ำประกัน ผู้ค้ำประกัน ลูกหนี้ชั้นต้น"),
+    (r"มัดจำ|เงินประกันการเช่า|เช่าบ้าน|เช่าห้อง|เช่าคอนโด|สัญญาเช่า|ไล่ที่",
+     "เช่าทรัพย์ ผู้ให้เช่า ผู้เช่า มัดจำ"),
+    (r"มรดก|พินัยกรรม|แบ่งสมบัติ|เจ้ามรดก|ทายาท",
+     "กองมรดก ทายาทโดยธรรม ผู้รับพินัยกรรม ตกทอดแก่ทายาท"),
+    (r"หย่า|สินสมรส|สินส่วนตัว|ค่าเลี้ยงดู|สินสอด|ของหมั้น|ฟ้องชู้",
+     "เหตุฟ้องหย่า สินสมรส สินส่วนตัว ค่าอุปการะเลี้ยงดู"),
 
     # --- ผู้บริโภค ---
     (r"ของไม่ตรงปก|ซื้อของออนไลน์|สั่งของแล้วไม่ได้|โดนโกงของ",
@@ -80,11 +110,29 @@ GLOSSARY: tuple[tuple[str, str], ...] = (
      "ข้อมูลส่วนบุคคล ผู้ควบคุมข้อมูลส่วนบุคคล ความยินยอม"),
     (r"ขอลบข้อมูล|ขอให้ลบ", "สิทธิขอให้ลบข้อมูลส่วนบุคคล"),
     (r"กล้องวงจรปิด|ถ่ายรูปเรา", "การเก็บรวบรวมข้อมูลส่วนบุคคล"),
+    # posting someone's photo is a real question the corpus can answer, through
+    # พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล -- a photograph identifies a person, so
+    # publishing it is การเปิดเผยข้อมูลส่วนบุคคล. Without these terms the question
+    # scored 0.53 and fell under the gate.
+    (r"โพสรูป|โพสต์รูป|โพสภาพ|โพสต์ภาพ|ลงรูป|เอารูป|เอาภาพ|แชร์รูป|แชร์ภาพ",
+     "ข้อมูลส่วนบุคคล การเปิดเผยข้อมูลส่วนบุคคล ความยินยอมของเจ้าของข้อมูล"),
 
     # --- จราจร ---
     (r"ชนแล้วหนี|ขับชน", "ผู้ขับขี่ก่อให้เกิดความเสียหาย ไม่หยุดให้ความช่วยเหลือ"),
     (r"เมาแล้วขับ|ดื่มแล้วขับ", "ขับรถในขณะเมาสุรา"),
     (r"ไม่ใส่หมวกกันน็อค|ไม่คาดเข็มขัด", "หมวกนิรภัย เข็มขัดนิรภัย"),
+
+    # --- พ.ร.บ.คอมพิวเตอร์ ---
+    (r"แฮก|แฮ็ก|hack|เจาะระบบ|เจาะรหัส|ขโมยรหัสผ่าน|เข้าระบบคนอื่น|ล็อกอินของคนอื่น",
+     "เข้าถึงโดยมิชอบซึ่งระบบคอมพิวเตอร์ มาตรการป้องกันการเข้าถึง"),
+    (r"โพสต์ข้อมูลเท็จ|โพสข้อมูลเท็จ|ข่าวปลอม|เฟกนิวส์|โพสต์เท็จ|ปล่อยข่าว",
+     "นำเข้าสู่ระบบคอมพิวเตอร์ซึ่งข้อมูลคอมพิวเตอร์อันเป็นเท็จ"),
+    (r"ตัดต่อภาพ|ตัดต่อรูป|ตกแต่งภาพ|ปล่อยคลิป|แอบถ่าย",
+     "ตัดต่อ เติม ดัดแปลงภาพของผู้อื่น ทำให้เสียชื่อเสียง"),
+    (r"เก็บ\s?log|ข้อมูลจราจร|ผู้ให้บริการเก็บข้อมูล",
+     "ข้อมูลจราจรทางคอมพิวเตอร์ ผู้ให้บริการ"),
+    (r"สแปม|อีเมลขยะ|ส่งเมลรบกวน",
+     "ส่งข้อมูลคอมพิวเตอร์หรือจดหมายอิเล็กทรอนิกส์แก่บุคคลอื่นโดยปกปิดแหล่งที่มา"),
 
     # --- กยศ. ---
     (r"กยศ|กู้เรียน|ทุนเรียน", "กองทุนเงินให้กู้ยืมเพื่อการศึกษา ผู้กู้ยืมเงิน"),
@@ -94,17 +142,25 @@ GLOSSARY: tuple[tuple[str, str], ...] = (
     (r"นายจ้าง|เจ้านาย|บริษัทที่ทำงาน", "นายจ้าง ลูกจ้าง"),
 )
 
-COMPILED = tuple((re.compile(pat), terms) for pat, terms in GLOSSARY)
+# (trigger, terms to append, optional pattern the question must also contain)
+COMPILED = tuple((re.compile(entry[0]), entry[1],
+                  re.compile(entry[2]) if len(entry) > 2 else None)
+                 for entry in GLOSSARY)
 
 
 def expand(question: str) -> tuple[str, list[str]]:
     """Return (query for retrieval, legal terms that were added)."""
     added: list[str] = []
-    for pattern, terms in COMPILED:
-        if pattern.search(question):
-            for term in terms.split():
-                if term not in added and term not in question:
-                    added.append(term)
+    for pattern, terms, context in COMPILED:
+        if not pattern.search(question):
+            continue
+        # a word can belong to two areas of law at once; the context pattern is
+        # how an entry says "only when the question is about that area"
+        if context is not None and not context.search(question):
+            continue
+        for term in terms.split():
+            if term not in added and term not in question:
+                added.append(term)
     if not added:
         return question, []
     return f"{question} {' '.join(added)}", added

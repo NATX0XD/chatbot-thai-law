@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
 """Deterministic detection of questions this corpus cannot answer.
 
-Similarity scores cannot catch these. "จดทะเบียนสมรสแล้วอยากหย่า" retrieves
-พระราชบัญญัติจดทะเบียนครอบครัว at cosine 0.64 -- a real, on-topic act that happens
-not to contain the grounds for divorce, because those live in ประมวลกฎหมายแพ่งและ
-พาณิชย์ บรรพ 5, which the source corpus does not include. To the retriever this
-looks exactly like a successful search.
+Similarity scores cannot catch these. A question whose governing text is missing
+still retrieves a real, on-topic Act -- to the retriever that looks exactly like a
+successful search, and the model then writes a confident answer out of a statute
+that does not contain the rule. Only a rule that knows what is absent can stop it.
 
-So the gap is handled by rule rather than by score. We know precisely which codes
-are absent (see บทที่ 5 of the dataset survey), so we can name them and tell the
-user where to look instead, which is more useful than a generic refusal.
+The set of gaps shrank when the two substantive codes were added to the corpus:
+questions about tenancy, inheritance, divorce, loans, theft and defamation now
+retrieve the section that governs them. What is still missing is the procedural
+codes -- ป.วิ.แพ่ง and ป.วิ.อาญา -- and พ.ร.บ.ประกันสังคม, which do not appear in
+any open dataset the project could find. พ.ร.บ.คอมพิวเตอร์ was in that list until
+it was rebuilt from the Royal Gazette transcriptions on Wikisource; see
+ingest/extract_computer_act.py.
 
-Patterns intentionally target *substantive* terms, not procedural ones: asking
-where to register a marriage is answerable from พระราชบัญญัติจดทะเบียนครอบครัว,
-asking on what grounds one may divorce is not.
+That makes the surviving rules a line between substance and procedure. The
+criminal code defines theft and its penalty; it says nothing about how to file a
+report, how bail is granted, or how a judgment is enforced. Patterns therefore
+target procedural vocabulary (แจ้งความ, ประกันตัว, บังคับคดี) and deliberately no
+longer touch the substantive words (ลักทรัพย์, มรดก, หย่า) that used to be here.
 """
 from __future__ import annotations
 
@@ -30,50 +35,40 @@ class Gap:
     def message(self) -> str:
         return (
             f"คำถามนี้อยู่ในเรื่อง{self.topic} ซึ่งกำกับโดย{self.code}\n\n"
-            f"คลังข้อมูลของระบบมีเฉพาะพระราชบัญญัติและพระราชกำหนด "
-            f"ยังไม่มี{self.code} ผมจึงตอบไม่ได้ และจะไม่เดาให้ครับ\n\n"
+            f"คลังข้อมูลของระบบยังไม่มี{self.code} ผมจึงตอบไม่ได้ และจะไม่เดาให้ครับ\n\n"
             "แนะนำให้ดูตัวบทที่ krisdika.go.th หรือปรึกษาทนายความ "
             "หรือติดต่อสภาทนายความ สายด่วน 1167 สำหรับคำปรึกษาเบื้องต้นฟรี"
         )
 
 
 def _p(*words: str) -> re.Pattern:
-    return re.compile("|".join(words))
+    # case-insensitive so that a user who types "hack" in Latin letters gets the
+    # same informative refusal as one who types "แฮก". Without it the question
+    # fell through to the generic "ไม่พบตัวบทที่เกี่ยวข้อง", which tells the user
+    # nothing about *why*.
+    return re.compile("|".join(words), re.I)
 
 
+# Six groups were removed when ประมวลกฎหมายแพ่งและพาณิชย์ (1,827 มาตรา) and
+# ประมวลกฎหมายอาญา (443 มาตรา) entered the corpus: tenancy, inheritance, family,
+# loans and guarantees, substantive criminal offences, and tort. Those questions
+# now retrieve the governing section instead of a refusal.
+#
+# What remains absent is the *procedural* codes and two Acts, so the rules that
+# survive draw a line the corpus really has: the criminal code says what theft is
+# and what it is punished with, but says nothing about how to report it, how bail
+# works, or how a judgment gets enforced.
 GAPS: tuple[Gap, ...] = (
-    Gap("เช่าทรัพย์และเงินมัดจำ", "ประมวลกฎหมายแพ่งและพาณิชย์ บรรพ 3",
-        _p("มัดจำ", "เงินประกันการเช่า", "ค่าเช่าบ้าน", "ค่าเช่าห้อง", "เช่าบ้าน",
-           "เช่าห้อง", "เช่าคอนโด", "เช่าที่ดิน", "สัญญาเช่า", "ผู้ให้เช่า",
-           "ผู้เช่า", "ไล่ที่", "ขึ้นค่าเช่า")),
-    Gap("มรดกและพินัยกรรม", "ประมวลกฎหมายแพ่งและพาณิชย์ บรรพ 6",
-        _p("มรดก", "พินัยกรรม", "ทายาทโดยธรรม", "แบ่งสมบัติ", "ผู้จัดการมรดก",
-           "เจ้ามรดก")),
-    Gap("ครอบครัว การสมรสและการหย่า", "ประมวลกฎหมายแพ่งและพาณิชย์ บรรพ 5",
-        _p("ฟ้องหย่า", "อยากหย่า", "จะหย่า", "การหย่า", "สินสมรส", "สินส่วนตัว",
-           "ค่าเลี้ยงดู", "ค่าอุปการะเลี้ยงดู", "อำนาจปกครองบุตร", "หมั้น",
-           "ของหมั้น", "สินสอด", "รับรองบุตร", "ฟ้องชู้")),
-    Gap("การกู้ยืมเงินและหลักประกัน", "ประมวลกฎหมายแพ่งและพาณิชย์ บรรพ 3",
-        _p("กู้ยืม", "ยืมเงิน", "ให้ยืมเงิน", "ค้ำประกัน", "ผู้ค้ำ", "จำนอง",
-           "จำนำ", "ดอกเบี้ยเงินกู้", "สัญญาเงินกู้", "หนี้นอกระบบ")),
-    # Everyday words matter more than statutory ones here. A user reporting a
-    # shoplifting friend wrote "ขโมยของ", not "ลักทรัพย์" -- the rule missed it,
-    # retrieval surfaced an unrelated payments act above the gate, and the model
-    # invented ประมวลกฎหมายอาญา มาตรา 335 out of its own memory.
-    Gap("ความผิดอาญา", "ประมวลกฎหมายอาญา",
-        _p("หมิ่นประมาท", "ฉ้อโกง", "ยักยอก", "ลักทรัพย์", "ทำร้ายร่างกาย",
-           "ข่มขืน", "ชิงทรัพย์", "วิ่งราว", "ปล้น", "บุกรุก", "โกงเงิน",
-           "หลอกโอนเงิน", "แจ้งความ", "เจตนาฆ่า", "พรากผู้เยาว์",
-           "ขโมย", "ขโมยของ", "ลักขโมย", "โจร", "ยกเค้า", "ตีชิง",
-           "ทำลายทรัพย์", "เผาทรัพย์", "ปลอมแปลง", "ติดคุก", "จำคุก",
-           "ต้องโทษ", "อายุความ", "ประกันตัว", "รับสารภาพ", "คดีอาญา")),
-    Gap("ละเมิดและการเรียกค่าเสียหาย", "ประมวลกฎหมายแพ่งและพาณิชย์ บรรพ 2",
-        _p("ละเมิด", "ค่าสินไหมทดแทน", "เรียกค่าเสียหายทางแพ่ง")),
+    Gap("วิธีพิจารณาคดีอาญา", "ประมวลกฎหมายวิธีพิจารณาความอาญา",
+        _p("แจ้งความ", "ลงบันทึกประจำวัน", "ประกันตัว", "ขอประกันตัว",
+           "ฝากขัง", "หมายจับ", "หมายค้น", "พนักงานสอบสวน", "ชั้นสอบสวน",
+           "สั่งฟ้อง", "สั่งไม่ฟ้อง", "อัยการ", "ยื่นฟ้องคดีอาญา")),
+    Gap("วิธีพิจารณาคดีแพ่งและการบังคับคดี", "ประมวลกฎหมายวิธีพิจารณาความแพ่ง",
+        _p("บังคับคดี", "หมายบังคับคดี", "ยึดทรัพย์", "อายัดเงินเดือน",
+           "อายัดทรัพย์", "ขายทอดตลาด", "เจ้าพนักงานบังคับคดี")),
     Gap("ประกันสังคม", "พระราชบัญญัติประกันสังคม พ.ศ. 2533",
         _p("ประกันสังคม", "ผู้ประกันตน", "มาตรา 33", "มาตรา 39", "มาตรา 40",
            "เงินชราภาพ", "เงินว่างงาน", "สปส")),
-    Gap("การกระทำความผิดทางคอมพิวเตอร์", "พระราชบัญญัติว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์",
-        _p("แฮก", "เจาะระบบ", "โพสต์ข้อมูลเท็จ", "พรบคอม", "พ\\.ร\\.บ\\.คอม")),
 )
 
 

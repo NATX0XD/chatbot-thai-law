@@ -31,6 +31,16 @@ IN_SCOPE = [
     "นายจ้างไม่จ่ายค่าจ้าง ต้องทำยังไง",
     "ขับรถชนแล้วหนี มีโทษอะไร",
     "ลูกจ้างอายุต่ำกว่า 18 ทำงานอะไรไม่ได้บ้าง",
+    # the two codes. Every one of these was in MISSING_LAW before they were added.
+    "เจ้าของบ้านยึดเงินมัดจำ ทำอะไรได้บ้าง",
+    "พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกแบ่งยังไง",
+    "โดนด่าในเฟซบุ๊ก ฟ้องหมิ่นประมาทได้ไหม",
+    "จดทะเบียนสมรสแล้วอยากหย่า ต้องทำยังไง",
+    "ให้เพื่อนยืมเงินแล้วไม่คืน ฟ้องได้ไหม",
+    "เพื่อนขโมยของในร้าน มีความผิดอะไร",
+    # พ.ร.บ.คอมพิวเตอร์, rebuilt from the Gazette after the codes went in
+    "แฮกเข้าระบบคนอื่นมีโทษอะไร",
+    "โพสต์ข้อมูลเท็จในเฟซบุ๊กผิดไหม",
 ]
 
 # genuinely not legal questions -- must always refuse
@@ -42,13 +52,18 @@ OFF_TOPIC = [
     "แนะนำร้านกาแฟแถวอารีย์",
 ]
 
-# legal, but the governing law is not in this corpus -- the dangerous middle case
+# legal, but the governing law is not in this corpus -- the dangerous middle case.
+#
+# This list was replaced wholesale when the two substantive codes were added. It
+# used to hold มัดจำ, มรดก, หมิ่นประมาท, หย่า and กู้ยืม; all five now retrieve the
+# section that governs them, so keeping them here would have measured the corpus
+# refusing questions it can answer. What is genuinely absent is procedure.
 MISSING_LAW = [
-    "เจ้าของบ้านยึดเงินมัดจำ ทำอะไรได้บ้าง",
-    "พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกแบ่งยังไง",
-    "โดนด่าในเฟซบุ๊ก ฟ้องหมิ่นประมาทได้ไหม",
-    "จดทะเบียนสมรสแล้วอยากหย่า ต้องทำยังไง",
-    "ให้เพื่อนยืมเงินแล้วไม่คืน ฟ้องได้ไหม",
+    "โดนโกงออนไลน์ ไปแจ้งความที่โรงพักไหนก็ได้ไหม",
+    "ขอประกันตัวในชั้นสอบสวนต้องใช้หลักทรัพย์เท่าไหร่",
+    "ศาลตัดสินแล้วลูกหนี้ไม่จ่าย จะยึดทรัพย์บังคับคดียังไง",
+    "ส่งเงินสมทบประกันสังคมครบ 15 ปี ได้บำนาญเท่าไหร่",
+    "ผู้ประกันตนมาตรา 39 ส่งเงินสมทบเดือนละเท่าไหร่",
 ]
 
 

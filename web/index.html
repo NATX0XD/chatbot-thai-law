@@ -394,9 +394,8 @@ const EXAMPLES = [
 ];
 // Every question here was run against the deployed bot and returned a section
 // from an act that actually governs it -- not merely a score above the gate.
-// An earlier 'ออนไลน์และคอมพิวเตอร์' group was removed after that check: the
-// corpus has no พ.ร.บ.คอมพิวเตอร์, so 'แฮกเข้าระบบคนอื่นมีโทษอะไร' was refused
-// by coverage.py and 'เอารูปคนอื่นไปตัดต่อผิดไหม' fell under the cosine gate.
+// The 'ออนไลน์และคอมพิวเตอร์' group was removed once for exactly that reason and
+// is back now that พ.ร.บ.คอมพิวเตอร์ is in the corpus, rebuilt from the Gazette.
 const TOPICS = [
   ['ลูกจ้างและการทำงาน', [
     'ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่',
@@ -422,6 +421,20 @@ const TOPICS = [
   ['ผู้บริโภคและการขายตรง', [
     'ซื้อของออนไลน์แล้วของไม่ตรงปก ร้องเรียนที่ไหน',
     'ขายตรงต้องจดทะเบียนกับใคร',
+  ]],
+  ['ประมวลกฎหมายแพ่งและอาญา', [
+    'พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกตกทอดแก่ใคร',
+    'เหตุฟ้องหย่ามีอะไรบ้าง',
+    'ให้เพื่อนยืมเงินแล้วไม่คืน ฟ้องได้ไหม',
+    'ค้ำประกันแล้วลูกหนี้หนี ต้องจ่ายแทนไหม',
+    'โดนด่าในเฟซบุ๊ก ฟ้องหมิ่นประมาทได้ไหม',
+    'ทำร้ายร่างกายจนสาหัสมีโทษอะไร',
+  ]],
+  ['ออนไลน์และคอมพิวเตอร์', [
+    'แฮกเข้าระบบคนอื่นมีโทษอะไร',
+    'โพสต์ข้อมูลเท็จในเฟซบุ๊กผิดไหม',
+    'ตัดต่อรูปคนอื่นแล้วโพสต์ผิดไหม',
+    'ผู้ให้บริการต้องเก็บ log กี่วัน',
   ]],
 ];
 

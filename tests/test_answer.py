@@ -45,10 +45,27 @@ def test_answers_a_covered_question(spy_llm):
 
 
 def test_missing_code_never_reaches_the_model(spy_llm):
-    a = run(answer_question("พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกแบ่งยังไง"))
+    a = run(answer_question("โดนโกงออนไลน์ ไปแจ้งความที่โรงพักไหนก็ได้ไหม"))
     assert not a.in_scope
     assert spy_llm == [], "a known gap must be refused before spending an LLM call"
-    assert "ประมวลกฎหมายแพ่งและพาณิชย์" in a.text, "the refusal should name the code"
+    assert "วิธีพิจารณาความอาญา" in a.text, "the refusal should name the code"
+
+
+def test_a_code_question_now_reaches_the_model(spy_llm):
+    """มรดก used to be refused by a coverage rule. Since ประมวลกฎหมายแพ่งและพาณิชย์
+    entered the corpus it is an ordinary answerable question, and the rule that
+    blocked it must be gone -- not merely loosened.
+
+    The claim is about the retrieval side, so it is checked there: the model was
+    called, and what it was handed was the civil code. `in_scope` is deliberately
+    not asserted -- the spy returns a canned answer citing an unrelated Act, which
+    app/verify.py then blocks, exactly as it should.
+    """
+    a = run(answer_question("พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกตกทอดแก่ใคร"))
+    assert len(spy_llm) == 1, "a code question must no longer be refused before the model"
+    assert "แพ่งและพาณิชย์" in spy_llm[0]["user"], "the civil code should be the context"
+    assert any("แพ่งและพาณิชย์" in h.citation for h in a.hits), \
+        [h.citation for h in a.hits]
 
 
 def test_off_topic_never_reaches_the_model(spy_llm):

@@ -9,6 +9,14 @@ import pytest
 
 from app.verify import unsupported_laws
 
+# the model pointing back at the act it was handed, rather than naming a new one
+SELF_REFERENCES = [
+    "ตาม พ.ร.บ.นี้ มาตรา 20 ผู้บริโภคมีสิทธิได้รับความปลอดภัย",
+    "ตามพระราชบัญญัตินี้ ผู้บริโภคมีสิทธิได้รับข่าวสารที่ถูกต้อง",
+    "ตาม พ.ร.บ.ดังกล่าว ผู้บริโภคร้องเรียนได้",
+    "ตามประมวลกฎหมายนี้ ผู้ใดลักทรัพย์ต้องระวางโทษ",
+]
+
 FAKE_ANSWER = (
     "เพื่อนของคุณมีความผิดฐานลักทรัพย์ตามประมวลกฎหมายอาญา มาตรา 335 "
     "ซึ่งมีโทษจำคุกไม่เกิน 5 ปี หรือปรับไม่เกิน 100,000 บาท "
@@ -53,3 +61,16 @@ def test_no_context_means_no_verdict():
     """With nothing retrieved there is nothing to check against; other guards
     handle that path, and flagging everything here would fire on refusal text."""
     assert unsupported_laws(FAKE_ANSWER, []) == []
+
+
+@pytest.mark.parametrize("answer", SELF_REFERENCES)
+def test_a_reference_back_to_the_supplied_act_is_not_a_fabrication(answer):
+    """Found from a real reply the bot threw away.
+
+    A user asked สิทธิผู้บริโภค คืออะไร. The answer cited พ.ร.บ.คุ้มครองผู้บริโภค
+    correctly and then wrote "ตาม พ.ร.บ.นี้" -- which the pattern read as the name
+    of a second, unknown statute, so the whole answer was blocked as fabricated.
+    "นี้" and "ดังกล่าว" point back at the evidence, they do not name new law.
+    """
+    cited = ["พระราชบัญญัติคุ้มครองผู้บริโภค พ.ศ. 2522 มาตรา 4"]
+    assert unsupported_laws(answer, cited) == []
