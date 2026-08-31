@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     typhoon_model: str = "typhoon-v2.5-30b-a3b-instruct"
     typhoon_fallback_model: str = "typhoon-v2.1-12b-instruct"
     llm_timeout: float = 60.0
+
+    # --- Gemini (third in the chain, only if a key is set) ---
+    # Typhoon is a research service its own docs call rate limited and not for
+    # high-throughput use, so a second provider is the difference between "the
+    # bot is quiet today" and "the bot answers". Same prompt, same guards; it is
+    # a different writer for the same retrieved sections, never a second opinion
+    # on the law.
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    gemini_model: str = "gemini-3.6-flash"
     llm_max_tokens: int = 1200
     llm_temperature: float = 0.2
 

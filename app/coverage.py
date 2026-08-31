@@ -26,18 +26,26 @@ import re
 from dataclasses import dataclass
 
 
+LAWYER = ("แนะนำให้ดูตัวบทที่ krisdika.go.th หรือปรึกษาทนายความ "
+          "หรือติดต่อสภาทนายความ สายด่วน 1167 สำหรับคำปรึกษาเบื้องต้นฟรี")
+REVENUE = ("แนะนำให้ดูที่กรมสรรพากร rd.go.th หรือสายด่วน 1161 "
+           "ซึ่งมีเครื่องคำนวณภาษีและคู่มือการยื่นแบบให้ด้วย")
+
+
 @dataclass(frozen=True)
 class Gap:
     topic: str
     code: str
     pattern: re.Pattern
+    # a refusal is more useful when it says where to go instead; the default is
+    # the bar association, but a tax question belongs at the revenue department
+    where: str = LAWYER
 
     def message(self) -> str:
         return (
             f"คำถามนี้อยู่ในเรื่อง{self.topic} ซึ่งกำกับโดย{self.code}\n\n"
             f"คลังข้อมูลของระบบยังไม่มี{self.code} ผมจึงตอบไม่ได้ และจะไม่เดาให้ครับ\n\n"
-            "แนะนำให้ดูตัวบทที่ krisdika.go.th หรือปรึกษาทนายความ "
-            "หรือติดต่อสภาทนายความ สายด่วน 1167 สำหรับคำปรึกษาเบื้องต้นฟรี"
+            f"{self.where}"
         )
 
 
@@ -66,6 +74,18 @@ GAPS: tuple[Gap, ...] = (
     Gap("วิธีพิจารณาคดีแพ่งและการบังคับคดี", "ประมวลกฎหมายวิธีพิจารณาความแพ่ง",
         _p("บังคับคดี", "หมายบังคับคดี", "ยึดทรัพย์", "อายัดเงินเดือน",
            "อายัดทรัพย์", "ขายทอดตลาด", "เจ้าพนักงานบังคับคดี")),
+    # The corpus holds nine tax Acts -- สรรพสามิต, ที่ดินและสิ่งปลูกสร้าง, ป้าย,
+    # การรับมรดก and more -- but not ประมวลรัษฎากร, which is where income tax, VAT
+    # and withholding actually live. That combination is the dangerous one: asked
+    # "เรื่องภาษี" the retriever returned พ.ร.บ.ภาษีการรับมรดก ม.31 and answered
+    # about a 1.5% surcharge, which is real law and almost certainly not the law
+    # the asker meant. So the rule names the code and points at the right agency.
+    Gap("ภาษีเงินได้ ภาษีมูลค่าเพิ่ม และภาษีหัก ณ ที่จ่าย", "ประมวลรัษฎากร",
+        _p("ภาษีเงินได้บุคคล", "ภาษีเงินได้นิติบุคคล", "ภาษีนิติบุคคล",
+           "ภาษีมูลค่าเพิ่ม", "vat", "แวต", "ภาษีหัก ณ ที่จ่าย", "หักภาษี ณ ที่จ่าย",
+           "ลดหย่อนภาษี", "ยื่นภาษี", "ยื่นแบบภาษี", "ภ\\.ง\\.ด", "ภพ\\.30",
+           "เสียภาษีเท่าไหร่", "เสียภาษีเท่าไร", "คำนวณภาษี", "ภาษีเงินเดือน"),
+        where=REVENUE),
     Gap("ประกันสังคม", "พระราชบัญญัติประกันสังคม พ.ศ. 2533",
         _p("ประกันสังคม", "ผู้ประกันตน", "มาตรา 33", "มาตรา 39", "มาตรา 40",
            "เงินชราภาพ", "เงินว่างงาน", "สปส")),
