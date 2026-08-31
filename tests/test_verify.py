@@ -106,3 +106,18 @@ def test_matching_by_containment_still_blocks_an_unrelated_code():
     has to be re-checked: a code named in the answer but never supplied."""
     supplied = ["พระราชบัญญัติว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์ พ.ศ. 2550 มาตรา 14"]
     assert unsupported_laws("ผิดฐานลักทรัพย์ตามประมวลกฎหมายอาญา ม.335", supplied) != []
+
+
+@pytest.mark.parametrize("text,ok", [
+    ("เรื่องนี้อยู่ในพระราชบัญญัติประกันสังคม พ.ศ. 2533 ซึ่งคลังของผมไม่มีครับ", True),
+    ("ปกติได้เงินทดแทนเดือนละ 5,000 บาท แต่ผมไม่มีตัวบทครับ", False),
+    ("ดูได้ที่มาตรา 33 ของกฎหมายฉบับนั้นครับ", False),
+    ("ได้ประมาณร้อยละ 50 ของค่าจ้างครับ", False),
+    ("เรื่องนี้อยู่ในพระราชบัญญัติประกันสังคม และประมวลกฎหมายแพ่งและพาณิชย์ครับ", False),
+])
+def test_a_refusal_may_name_its_missing_act_but_nothing_else(text, ok):
+    """A refusal is still a message about law. It may say which act it lacks --
+    that is the useful part -- but a section number, a figure, or a second act
+    means it started answering, and the fixed text is used instead."""
+    from app.refuse import _unsafe
+    assert (_unsafe(text, "พระราชบัญญัติประกันสังคม พ.ศ. 2533") is None) is ok

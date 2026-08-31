@@ -32,6 +32,7 @@ from app.config import settings
 from app.coverage import answer_beyond_corpus as find_gap_in_answer, find_gap
 from app.flex import answer_message
 from app.llm import LLMUnavailable, complete
+from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.verify import unsupported_laws
@@ -147,6 +148,12 @@ def tidy_for_chat(text: str) -> str:
     return text.strip()
 
 
+async def phrase_refusal(question: str, gap) -> str:
+    """Word a coverage-rule refusal for this particular question."""
+    return await compose_refusal(question, topic=gap.topic, code=gap.code,
+                                 where=gap.where, fallback=gap.message())
+
+
 def build_context(hits: list[Hit]) -> str:
     blocks = []
     for i, h in enumerate(hits, start=1):
@@ -171,7 +178,7 @@ async def answer_question(question: str) -> Answer:
     gap = find_gap(question)
     if gap:
         log.info("REFUSED gap=%s | %r", gap.topic, question[:80])
-        return Answer(text=gap.message(), in_scope=False)
+        return Answer(text=await phrase_refusal(question, gap), in_scope=False)
 
     # retrieval is CPU-bound: encoding the query plus scoring 27k BM25 documents
     # takes long enough to stall every other request if run on the event loop
@@ -181,7 +188,15 @@ async def answer_question(question: str) -> Answer:
     if not result.in_scope:
         log.info("REFUSED low-score dense=%.4f bm25=%.1f | %r",
                  result.max_dense, result.max_bm25, question[:80])
-        return Answer(text=OUT_OF_SCOPE, hits=hits, in_scope=False)
+        text = await compose_refusal(
+            question,
+            topic="เรื่องที่คลังข้อมูลนี้ไม่มีตัวบทครอบคลุม",
+            code="กฎหมายที่ยังไม่ได้เก็บเข้าคลัง",
+            where=("ลองถามใหม่ด้วยคำที่ตรงกับเนื้อหากฎหมายมากขึ้น เช่น เรื่องเลิกจ้าง "
+                   "ค่าชดเชย วันลา การทวงหนี้ ข้อมูลส่วนบุคคล สัญญาเช่า มรดก "
+                   "ความผิดอาญา หรือเรื่องคอมพิวเตอร์ หรือดูตัวบทเองที่ krisdika.go.th"),
+            fallback=OUT_OF_SCOPE)
+        return Answer(text=text, hits=hits, in_scope=False)
 
     log.info("ANSWERING dense=%.4f top=%s | %r",
              result.max_dense, hits[0].citation if hits else "-", question[:80])
@@ -206,8 +221,8 @@ async def answer_question(question: str) -> Answer:
     strayed = find_gap_in_answer(text)
     if strayed:
         log.warning("REFUSED answer-side gap=%s | %r", strayed.topic, question[:80])
-        return Answer(text=strayed.message(), hits=hits, in_scope=False,
-                      error="answer beyond corpus")
+        return Answer(text=await phrase_refusal(question, strayed), hits=hits,
+                      in_scope=False, error="answer beyond corpus")
 
     citations = [h.citation for h in hits]
     # last line of defence: the model may ignore the context and answer from its
