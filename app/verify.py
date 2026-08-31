@@ -48,8 +48,13 @@ NOISE = re.compile(r"(พ\.?\s?ศ\.?\s*[๐-๙0-9]*|มาตรา\s*[๐-๙
 # พ.ร.บ.คุ้มครองผู้บริโภค correctly, then wrote "ตาม พ.ร.บ.นี้" and the guard
 # blocked the whole thing as fabricated.
 SELF_REF = re.compile(r"^(?:ประมวล)?(?:นี้|ดังกล่าว|ฉบับนี้|ข้างต้น|เดียวกัน)")
+# Every form of "this is a statute" is stripped, so only the distinguishing part
+# of the name is compared. That includes ประมวลกฎหมาย, because the model calls
+# ประมวลกฎหมายแพ่งและพาณิชย์ "พ.ร.บ.แพ่งและพาณิชย์" often enough that a correct
+# answer about มรดก was thrown away for it -- the wrong word for the kind of
+# statute is a naming slip, not an invented law.
 ABBREV = (("พระราชบัญญัติ", ""), ("พระราชกำหนด", ""),
-          ("พรบ", ""), ("พรก", ""), ("ประมวลกฎหมาย", "ประมวล"), ("ประมวลรัษฎากร", "ประมวลรัษฎากร"))
+          ("พรบ", ""), ("พรก", ""), ("ประมวลกฎหมาย", ""))
 
 
 def normalise(name: str) -> str:

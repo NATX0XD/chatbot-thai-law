@@ -74,3 +74,15 @@ def test_a_reference_back_to_the_supplied_act_is_not_a_fabrication(answer):
     """
     cited = ["พระราชบัญญัติคุ้มครองผู้บริโภค พ.ศ. 2522 มาตรา 4"]
     assert unsupported_laws(answer, cited) == []
+
+
+@pytest.mark.parametrize("answer", [
+    "มรดกตกทอดแก่ทายาทโดยธรรม (พ.ร.บ.แพ่งและพาณิชย์ ม.1603)",
+    "ตาม ป.พ.พ. ม.1603 มรดกตกทอดแก่ทายาท",
+])
+def test_a_code_called_by_the_wrong_kind_of_name_is_not_a_fabrication(answer):
+    """Also from the running bot. Asked about มรดก, the model answered correctly
+    from ประมวลกฎหมายแพ่งและพาณิชย์ but wrote 'พ.ร.บ.แพ่งและพาณิชย์'. Using the
+    wrong word for what kind of statute it is misnames a real law; it does not
+    invent one, and the answer it appeared in was right."""
+    assert unsupported_laws(answer, ["ประมวลกฎหมายแพ่งและพาณิชย์ มาตรา 1603"]) == []
