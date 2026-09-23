@@ -41,6 +41,7 @@ from app.llm import LLMUnavailable, complete
 from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
+from app.support import Corpus as SupportIndex, unsupported_claims
 from app.verify import unsupported_laws, unsupported_sections
 
 log = logging.getLogger(__name__)
@@ -113,6 +114,13 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
     ห้ามเปลี่ยน "พึง" เป็น "ต้อง" หรือกลับกัน
 13. ถ้าจะอ้างอนุข้อหรือวรรค เช่น (ก) (ข) (๑) ต้องแน่ใจว่าข้อความนั้นอยู่ในอนุข้อนั้นจริง
     ถ้าไม่แน่ใจ ให้อ้างเฉพาะเลขข้อ ดีกว่าอ้างอนุข้อผิด
+    ห้ามเขียนช่วงอนุข้อ เช่น (๑)-(๕) ถ้าไม่ได้ยกมาครบทุกอนุข้อในช่วงนั้น
+14. เวลาอ้างข้อใด ให้บอกด้วยว่าข้อนั้นอยู่ในด้านหรือหมวดใด เช่น "ข้อ 9 จรรยาบรรณต่อผู้รับบริการ"
+15. ถ้าคำถามระบุประเภทผู้ประกอบวิชาชีพ เช่น ผู้บริหารสถานศึกษา ผู้บริหารการศึกษา ศึกษานิเทศก์
+    ต้องตอบด้วยข้อของประเภทนั้นโดยตรง ไม่ใช่ข้อทั่วไปหรือข้อของครู
+16. ถ้าคำถามเปรียบเทียบสองกลุ่ม ให้ยกเลขข้อของทั้งสองกลุ่มมาวางคู่กัน
+17. ถ้าคำถามถามถึงคำว่า "ต้อง" หรือ "พึง" ให้เทียบกับข้ออื่นข้างเคียงด้วยว่าใช้คำใด
+18. ทุกขั้นตอนของกระบวนการที่อธิบาย ต้องมีเลขข้อกำกับ ถ้าไม่มีเลขข้อรองรับ อย่าเขียนขั้นตอนนั้น
 
 รูปแบบสำหรับหน้าจอแชท
 - ย่อหน้าแรกคือคำตอบตรง ๆ 1-2 ประโยค ต้องอ่านจบแล้วได้คำตอบทันที
@@ -297,6 +305,17 @@ def looks_degenerate(text: str) -> bool:
     return bool(DEGENERATE_RUN.search(text))
 
 
+_support: SupportIndex | None = None
+
+
+def _support_index() -> SupportIndex:
+    """Built once from the same corpus the retriever holds."""
+    global _support
+    if _support is None:
+        _support = SupportIndex(list(get_retriever().corpus))
+    return _support
+
+
 async def answer_question(question: str) -> Answer:
     question = (question or "").strip()
     if not question:
@@ -387,6 +406,13 @@ async def answer_question(question: str) -> Answer:
     # the number matters as much as the name. An answer can cite the right
     # regulation and the wrong rule inside it, which reads as correct and sends
     # the reader to text that does not say what they were told it says.
+    unsupported = unsupported_claims(text, _support_index())
+    if unsupported:
+        log.warning("UNSUPPORTED CLAIM %s | %r", unsupported, question[:80])
+        if settings.claim_check_blocks:
+            return Answer(text=MISCITED.format(sections=", ".join(unsupported[:3])),
+                          hits=hits, in_scope=False, error="unsupported claims")
+
     miscited = unsupported_sections(text, citations, [h.rec["text"] for h in hits])
     if miscited:
         log.warning("MISCITED %s | %r", miscited, question[:80])

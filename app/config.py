@@ -134,6 +134,13 @@ class Settings(BaseSettings):
     # drives ranking.
     min_dense_sim: float = 0.46   # BGE-M3 cosine
 
+    # --- checking a citation against the text it points at ---
+    # Logs rather than blocks. app/support.py explains what has to be fixed
+    # before it can decide anything: the claim window reads backwards from the
+    # citation, and answers often put the sentence after it, which produced a
+    # 5-in-12 flag rate on answers that were correct.
+    claim_check_blocks: bool = False
+
     # --- reranking ---
     # Off until measured. See app/rerank.py for why, and run
     # `python -m ingest.eval_retrieval --rerank` before turning it on.
