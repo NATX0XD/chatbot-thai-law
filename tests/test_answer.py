@@ -258,6 +258,30 @@ def test_a_duty_arrives_with_every_rule_that_states_it(spy_llm):
         assert f"จรรยาบรรณของวิชาชีพ 2556 {section}" in context, section
 
 
+def test_a_duty_named_in_the_question_is_the_duty_that_arrives(spy_llm):
+    """Retrieval cannot pick between five near-identical phrasings.
+
+    "พฤติกรรมพึงประสงค์ด้านจรรยาบรรณต่อวิชาชีพ" came back holding rules about
+    ต่อตนเอง and ต่อผู้ร่วมประกอบวิชาชีพ and none about the duty it asked for.
+    The name is in the question; reading it is free and exact.
+    """
+    run(answer_question("พฤติกรรมพึงประสงค์ด้านจรรยาบรรณต่อวิชาชีพมีอะไรบ้าง"))
+    context = spy_llm[0]["user"]
+    assert "จรรยาบรรณของวิชาชีพ 2556 ข้อ 8" in context
+    assert "แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 6" in context
+
+
+def test_the_expansion_does_not_drag_in_every_duty_at_once(spy_llm):
+    """A question that names no duty gets the best-ranked one, not all five."""
+    run(answer_question("ครูนินทาเพื่อนครูผิดไหม"))
+    context = spy_llm[0]["user"]
+    named = sum(1 for duty in ("ต่อตนเอง", "ต่อวิชาชีพ", "ต่อผู้รับบริการ",
+                               "ต่อผู้ร่วมประกอบวิชาชีพ", "ต่อสังคม")
+                if f"ส่วนที่ 1 จรรยาบรรณ{duty}" in context
+                or f"หมวด 1 จรรยาบรรณ{duty}" in context)
+    assert named <= 2, context[:400]
+
+
 def test_the_regulation_that_states_the_duties_is_read_first(spy_llm):
     """2556 states each duty; 2550 illustrates it. The answer should rest on the
     first and quote the second, and the model follows whichever it reads first."""

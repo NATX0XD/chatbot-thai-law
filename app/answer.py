@@ -206,23 +206,55 @@ async def phrase_refusal(question: str, gap) -> str:
 # rather than illustrating them -- so the cost is bounded and the gain is that
 # an answer always has the rule itself in front of it, not only an example.
 STATES_THE_DUTIES = "ksp-2556"
+# ข้อบังคับฯ 2550 repeats the five duties once per kind of practitioner. The
+# chapter for ครู is the one almost every question means, and it is where the
+# worked examples of good and bad conduct live, so it comes along too -- one
+# extra rule per duty, not four.
+ILLUSTRATES_THE_DUTIES = "ksp-2550"
+FOR_TEACHERS = "วิชาชีพครู"
 
 
-def with_chapter_siblings(hits: list[Hit], corpus) -> list[Hit]:
-    """Add the rules that share a duty with something already retrieved."""
-    # Read the duty off whatever was retrieved, not only off 2556. A question
-    # answered entirely out of ข้อบังคับฯ 2550 -- which is most of them, since
-    # that is where the worked examples are -- should still be shown the rule
-    # that states the duty, and 2550 records carry the same label.
-    wanted = {h.rec.get("ethics_category") for h in hits if h.rec.get("ethics_category")}
+# The five duties as a reader writes them. None is a substring of another, so a
+# question that names one names exactly one.
+DUTY_NAMES = ("ต่อตนเอง", "ต่อวิชาชีพ", "ต่อผู้รับบริการ",
+              "ต่อผู้ร่วมประกอบวิชาชีพ", "ต่อสังคม")
+
+
+def duties_named(question: str) -> set[str]:
+    """Which of the five the question asks about, by name.
+
+    Retrieval cannot be relied on for this. The five duties are phrased almost
+    identically and sit close together in embedding space, so a question about
+    จรรยาบรรณต่อวิชาชีพ came back holding rules about ต่อตนเอง and
+    ต่อผู้ร่วมประกอบวิชาชีพ and none about the one it asked for. The name is
+    right there in the question; reading it is free and exact.
+    """
+    return {duty for duty in DUTY_NAMES if duty in question}
+
+
+def with_chapter_siblings(hits: list[Hit], corpus, question: str = "") -> list[Hit]:
+    """Add the rules that state, or illustrate, a duty that is in play."""
+    # A duty the question names outright is the duty it is about. Only when it
+    # names none is the duty inferred, and then from the best-ranked labelled
+    # hit alone -- taking every duty that appeared anywhere in the results added
+    # eight rules to a question about one of them.
+    wanted = duties_named(question)
+    if not wanted:
+        ranked = [h.rec.get("ethics_category") for h in hits if h.rec.get("ethics_category")]
+        wanted = {ranked[0]} if ranked else set()
     if not wanted:
         return hits
     have = {h.rec["id"] for h in hits}
-    extra = [Hit(rec=rec, rrf=0.0) for rec in corpus
-             if rec["sysid"] == STATES_THE_DUTIES
-             and rec.get("ethics_category") in wanted
-             and rec["id"] not in have]
-    return hits + extra
+    def belongs(rec) -> bool:
+        if rec.get("ethics_category") not in wanted or rec["id"] in have:
+            return False
+        if rec["sysid"] == STATES_THE_DUTIES:
+            return True
+        chapters = rec.get("chapters") or []
+        return (rec["sysid"] == ILLUSTRATES_THE_DUTIES
+                and bool(chapters) and chapters[0].endswith(FOR_TEACHERS))
+
+    return hits + [Hit(rec=rec, rrf=0.0) for rec in corpus if belongs(rec)]
 
 
 def order_for_reading(hits: list[Hit]) -> list[Hit]:
@@ -309,7 +341,8 @@ async def answer_question(question: str) -> Answer:
     # Everything downstream reads this list, not the raw ranking: the guards
     # have to judge the answer against exactly what the model was shown, or
     # citing a rule that was added as a chapter sibling looks like an invention.
-    hits = order_for_reading(with_chapter_siblings(hits, get_retriever().corpus))
+    hits = order_for_reading(
+        with_chapter_siblings(hits, get_retriever().corpus, question))
     user_prompt = (f"คำถามของประชาชน\n{question}\n\n"
                    f"ตัวบทที่ค้นได้\n{build_context(hits)}")
     try:

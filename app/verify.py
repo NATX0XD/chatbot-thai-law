@@ -25,7 +25,12 @@ import re
 # hides inside a legitimate one:
 #   "ตาม พ.ร.บ.การทวงถามหนี้ 2558 ม.9 และประมวลกฎหมายแพ่งและพาณิชย์"
 # matched as a single title and passed, because it started with a real act.
-STOP = r"(?!และ|หรือ|ตาม|กับ|ซึ่ง|โดย|เพื่อ|แต่|จึง|ที่|ใน|มาตรา|ม\.)"
+# Words that open a clause. A title cannot contain them, and letting the
+# trailing-token window swallow one turns half a sentence into a law name:
+# "พระราชบัญญัติฉบับเดียวกัน คือ ประกอบด้วยจรรยาบรรณต่อตนเอง..." was reported as
+# a statute the corpus does not hold, and a correct answer was thrown away.
+STOP = (r"(?!และ|หรือ|ตาม|กับ|ซึ่ง|โดย|เพื่อ|แต่|จึง|ที่|ใน|มาตรา|ม\."
+        r"|คือ|ได้แก่|เช่น|ประกอบด้วย|หมายความว่า|กำหนด|ระบุ|บัญญัติ)")
 # A single space or tab, never a newline. With \s the window ran past the end
 # of a line and swallowed the next bullet point into the "law name", so the
 # refusal message quoted half a paragraph back at the user.
@@ -88,7 +93,8 @@ NOISE = re.compile(r"(พ\.?\s?ศ\.?\s*[๐-๙0-9]*|มาตรา\s*[๐-๙
 # correct answer about สิทธิผู้บริโภค is how this was found: the reply cited
 # พ.ร.บ.คุ้มครองผู้บริโภค correctly, then wrote "ตาม พ.ร.บ.นี้" and the guard
 # blocked the whole thing as fabricated.
-SELF_REF = re.compile(r"^(?:ประมวล)?(?:นี้|ดังกล่าว|ฉบับนี้|ข้างต้น|เดียวกัน)")
+SELF_REF = re.compile(r"^(?:ประมวล)?(?:นี้|ดังกล่าว|ฉบับนี้|ฉบับเดิม|ฉบับเดียวกัน"
+                      r"|ข้างต้น|เดียวกัน|ทั้งสองฉบับ|ดังกล่าวข้างต้น)")
 # Every form of "this is a statute" is stripped, so only the distinguishing part
 # of the name is compared. That includes ประมวลกฎหมาย, because the model calls
 # ประมวลกฎหมายแพ่งและพาณิชย์ "พ.ร.บ.แพ่งและพาณิชย์" often enough that a correct
