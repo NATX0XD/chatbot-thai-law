@@ -189,7 +189,7 @@ UptimeRobot → New Monitor
 ## แก้ปัญหา
 
 **deploy ล้มตอน build** — ดู log ว่าไฟล์ index ถูก push ขึ้นไปครบไหม
-`.gitignore` ปล่อยผ่านไว้แค่ 4 ไฟล์ `corpus.jsonl`, `vectors.npy`, `bm25_compact.npz`, `bm25_vocab.json`
+`.gitignore` ปล่อยผ่านไว้แค่ 5 ไฟล์ `corpus_ksp.jsonl`, `corpus.jsonl`, `vectors.npy`, `bm25_compact.npz`, `bm25_vocab.json`
 
 ```bash
 git ls-files data/ | cat
@@ -201,7 +201,7 @@ service จะไม่ตายแต่ตอบไม่ได้ ดูโ�
 
 **บอทตอบช้ามากคำถามแรกของวัน** — service หลับไป ตรวจว่า UptimeRobot ยังเดินอยู่
 
-**`index/corpus mismatch`** — `vectors.npy` กับ `corpus.jsonl` คนละรุ่นกัน
+**`index/corpus mismatch`** — `vectors.npy` กับไฟล์ corpus ที่ `CORPUS_FILE` ชี้อยู่ คนละรุ่นกัน
 สร้างใหม่ในเครื่องด้วย `python -m ingest.build_index --dense` แล้ว push ใหม่
 
 ---

@@ -20,8 +20,13 @@ RUN pip install --no-cache-dir -r requirements-server.txt
 COPY app/ app/
 COPY web/ web/
 
-# only the three files the retriever opens; data/raw and the intermediate
-# processed artefacts stay out of the image
+# only the files the retriever opens; data/raw, data/ocr and the intermediate
+# processed artefacts stay out of the image.
+#
+# Both corpora are copied. The index in this image is built from whichever one
+# CORPUS_FILE names -- corpus_ksp.jsonl by default -- and shipping the other
+# costs 66 MB but makes CORPUS_FILE=corpus.jsonl a restart rather than a rebuild.
+COPY data/processed/corpus_ksp.jsonl    data/processed/corpus_ksp.jsonl
 COPY data/processed/corpus.jsonl        data/processed/corpus.jsonl
 COPY data/index/vectors.npy             data/index/vectors.npy
 COPY data/index/bm25_compact.npz        data/index/bm25_compact.npz
