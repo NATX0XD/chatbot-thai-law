@@ -11,8 +11,12 @@ data/index/*
 data/processed/*.jsonl
 data/processed/*.csv
 
-# ...ยกเว้นสามไฟล์ที่ตอนเสิร์ฟต้องใช้ Render build image จาก git จึงต้องมีใน repo
-# (127 MB รวมกัน ต่ำกว่าลิมิต 100 MB ต่อไฟล์ของ GitHub ทุกไฟล์)
+# ...ยกเว้นไฟล์ที่ตอนเสิร์ฟต้องใช้ Render build image จาก git จึงต้องมีใน repo
+# (ต่ำกว่าลิมิต 100 MB ต่อไฟล์ของ GitHub ทุกไฟล์)
+#
+# corpus_ksp.jsonl คือคลังที่เสิร์ฟอยู่จริง 0.9 MB ถ้าไม่มีไฟล์นี้ ดัชนีที่ commit ไว้
+# จะไม่มีข้อความให้ชี้ และ retriever จะล้มตอนเริ่มทำงานด้วย index/corpus mismatch
+!data/processed/corpus_ksp.jsonl
 !data/processed/corpus.jsonl
 !data/index/vectors.npy
 !data/index/bm25_compact.npz
