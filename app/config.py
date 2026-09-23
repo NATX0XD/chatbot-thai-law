@@ -34,7 +34,12 @@ class Settings(BaseSettings):
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     gemini_model: str = "gemini-3.6-flash"
     llm_max_tokens: int = 1200
-    llm_temperature: float = 0.2
+    # Zero, not a little above it. This is a citation-bound task: the wording is
+    # supposed to follow the retrieved text, and sampling is what lets the writer
+    # drift off it -- rendering a rule's "พึง" as "ต้อง", pointing at อนุข้อ (ก)
+    # for a sentence that sits under (ข), adding a deadline the section does not
+    # state. Variety has no value here and the failure it buys is expensive.
+    llm_temperature: float = 0.0
 
     # --- LINE ---
     line_channel_secret: str = ""
