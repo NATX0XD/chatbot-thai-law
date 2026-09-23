@@ -146,7 +146,13 @@ def unsupported_laws(answer: str, citations: list[str],
     allowed = allowed_names(citations)
     if not allowed:
         return []
-    quoted = " ".join(evidence or [])
+    # The same extractor, run over the sections themselves, and compared in the
+    # same normalised form. Exact substring matching was not enough: มาตรา 49
+    # says "ให้มีข้อบังคับว่าด้วยมาตรฐานวิชาชีพ" and the answer wrote
+    # "ข้อบังคับคุรุสภา ว่าด้วยมาตรฐานวิชาชีพ", which is the same instrument
+    # named the way people name it.
+    quoted = allowed_names([m for text in (evidence or [])
+                            for m in LAW_MENTION.findall(text)])
     bad = []
     for raw in LAW_MENTION.findall(answer):
         if COUNCIL_HEAD.match(raw.strip()) and not NAMED.search(raw):
@@ -158,7 +164,7 @@ def unsupported_laws(answer: str, citations: list[str],
             continue
         if _names_the_same_law(name, allowed):
             continue
-        if raw.strip() and raw.strip() in quoted:
+        if _names_the_same_law(name, quoted):
             continue
         if raw.strip() not in bad:
             bad.append(raw.strip())
@@ -172,7 +178,7 @@ def unsupported_laws(answer: str, citations: list[str],
 MIN_CONTAINS = 6
 
 
-def _names_the_same_law(name: str, allowed: set[str]) -> bool:
+def _names_the_same_law(name: str, allowed: set[str]) -> bool:  # noqa: D401
     """Is `name` one of the acts we supplied, under any of the names people use?
 
     Containment rather than a shared prefix, because the everyday name of an act
