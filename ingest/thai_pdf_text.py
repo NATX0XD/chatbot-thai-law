@@ -88,6 +88,12 @@ THAI_CONSONANT = re.compile(r"[ก-ฮ]")
 THAI_TONE = re.compile(r"[็-๎]")
 LATIN_LETTER = re.compile(r"[A-Za-zÀ-ɏͰ-Ͽ‘-‟†-™]")
 PUA = re.compile(r"[-]")
+# A consonant, a space, then สระอา. Real Thai never writes that, so it is a
+# reliable fingerprint of a text layer whose zero-width marks were emitted at
+# the wrong x position: ข้อบังคับฯ 2563 arrives with "ท ารายงาน" for "ทำรายงาน"
+# and "ค าวินิจฉัย" for "คำวินิจฉัย", 43 times, while every ratio still looks
+# healthy. Those documents have to be read by OCR instead.
+SPLIT_SARA = re.compile(r"[ก-ฮ]\s+[าำ]")
 CONTROL = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
 # words that appear in all ten documents; their absence means the page came out
@@ -116,6 +122,24 @@ class ExtractionError(RuntimeError):
 def normalize_pua(text: str) -> str:
     """Put PUA-encoded marks back where they belong."""
     return text.translate(PUA_MAP)
+
+
+def compose_sara_am(text: str) -> str:
+    """Join NIKHAHIT + SARA AA back into the single character SARA AM.
+
+    Thai typesetters write ำ as two glyphs so the circle can be positioned over
+    the consonant, and every one of these PDFs does it -- 648 times across the
+    ten. Unicode NFC does not compose the pair, so it survives into the index
+    and splits words in half: pythainlp reads "ดําเนิน" as ดํา + เนิน and
+    "สม่ําเสมอ" as สม่ํา + เสมอ, which means BM25 never matches the query a
+    person actually types.
+    """
+    return text.replace("ํา", "ำ")
+
+
+def settle(text: str) -> str:
+    """The normalising every rung ends with, whatever produced the text."""
+    return compose_sara_am(unicodedata.normalize("NFC", text))
 
 
 def from_legacy(text: str) -> str:
@@ -187,6 +211,16 @@ def check(text: str) -> list[str]:
 
     if CONTROL.search(text):
         problems.append("เหลืออักขระควบคุม")
+
+    if "ํา" in text:
+        problems.append("เหลือ ํ+า ที่ยังไม่รวมเป็น ำ")
+
+    split = SPLIT_SARA.findall(text)
+    if split:
+        problems.append(
+            f"มีสระลอยห่างจากพยัญชนะ {len(split)} จุด เช่น {split[0]!r} "
+            "— ตัวบทวางวรรณยุกต์ผิดตำแหน่ง"
+        )
 
     tones = tone_ratio(text)
     low, high = TONE_RATIO
@@ -271,9 +305,10 @@ def extract(path: str, allow_ocr: bool = True) -> tuple[str, str]:
     if looks_legacy(raw):
         attempts.append(("legacy", normalize_pua(from_legacy(raw))))
     else:
-        attempts.append(("direct", unicodedata.normalize("NFC", raw)))
+        attempts.append(("direct", raw))
         if PUA.search(raw):
-            attempts.append(("pua", unicodedata.normalize("NFC", normalize_pua(raw))))
+            attempts.append(("pua", normalize_pua(raw)))
+    attempts = [(name, settle(text)) for name, text in attempts]
 
     failures = []
     for name, text in attempts:
@@ -285,7 +320,7 @@ def extract(path: str, allow_ocr: bool = True) -> tuple[str, str]:
     if not allow_ocr:
         raise ExtractionError(f"{path} อ่านไม่ได้\n" + "\n".join(failures))
 
-    text = unicodedata.normalize("NFC", ocr(path))
+    text = settle(ocr(path))
     problems = check(text)
     if problems:
         failures.append(f"  ocr: {'; '.join(problems)}")

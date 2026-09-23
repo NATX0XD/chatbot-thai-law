@@ -14,6 +14,7 @@ from ingest.thai_pdf_text import (
     MUST_CONTAIN,
     PUA_MAP,
     check,
+    compose_sara_am,
     from_legacy,
     looks_legacy,
     normalize_pua,
@@ -124,6 +125,19 @@ def test_text_that_lost_its_tone_marks_is_caught():
 def test_leftover_pua_is_caught():
     problems = check(GOOD + chr(0xF70B))
     assert any("PUA" in p for p in problems)
+
+
+def test_sara_am_written_as_two_glyphs_is_joined():
+    """Every one of these PDFs writes ำ as ํ followed by า, 648 times in all."""
+    assert compose_sara_am("ดํา" + "เนิน") == "ดำเนิน"
+    assert compose_sara_am("สม่ําเสมอ") == "สม่ำเสมอ"
+    assert compose_sara_am("คําวินิจฉัย") == "คำวินิจฉัย"
+
+
+def test_sara_am_left_undone_is_caught():
+    """pythainlp splits ดําเนิน into two words, so BM25 stops matching."""
+    problems = check(GOOD + " การดําเนินการ")
+    assert any("ำ" in p for p in problems)
 
 
 def test_control_characters_are_caught():
