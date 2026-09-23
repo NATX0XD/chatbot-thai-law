@@ -64,7 +64,7 @@ def test_menu_cells_say_different_things():
 def test_capability_text_states_what_is_missing():
     """Users must learn the limits from the bot itself, not by getting it wrong.
 
-    The list changed when the two codes were added: มรดก and หมิ่นประมาท are now
-    answerable, and what the text has to warn about is procedure."""
-    for topic in ("แจ้งความ", "ประกันตัว", "บังคับคดี", "ประกันสังคม"):
+    What the text has to warn about is the near misses -- everything about a
+    teacher that is not about their professional ethics."""
+    for topic in ("วินัยข้าราชการครู", "ใบอนุญาต", "สัญญาจ้าง", "ภาษี"):
         assert topic in CAPABILITIES

@@ -2,7 +2,9 @@
 """End-to-end behaviour of answer_question, with the LLM stubbed out.
 
 The point of these tests is the refusal path: nothing here should ever reach the
-model unless the corpus really does hold the answer.
+model unless the corpus really does hold the answer, and nothing the model writes
+should reach the user unless every name and every number in it is backed by a
+section that was actually retrieved.
 """
 import asyncio
 import os
@@ -15,18 +17,24 @@ from app.config import settings
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.bm25_path),
-    reason="index not built -- run ingest.extract_acts then ingest.build_index",
+    reason="index not built -- run ingest.extract_ksp then ingest.build_index",
 )
+
+ANSWERABLE = "ครูด่านักเรียนหน้าชั้นผิดจรรยาบรรณไหม"
 
 
 @pytest.fixture
 def spy_llm(monkeypatch):
-    """Replace the Typhoon call and record whether it was reached."""
+    """Replace the model call and record whether it was reached.
+
+    The canned reply cites nothing, so the guards downstream have nothing to
+    object to and the test can be about the path rather than about the content.
+    """
     calls = []
 
     async def fake_complete(system, user):
         calls.append({"system": system, "user": user})
-        return "คำตอบจำลอง (พระราชบัญญัติคุ้มครองแรงงาน พ.ศ. 2541 มาตรา 118)"
+        return "คำตอบจำลองที่ไม่ได้อ้างตัวบทใด"
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
     return calls
@@ -37,35 +45,33 @@ def run(coro):
 
 
 def test_answers_a_covered_question(spy_llm):
-    a = run(answer_question("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"))
+    a = run(answer_question(ANSWERABLE))
     assert a.in_scope
     assert len(spy_llm) == 1, "the model should have been called"
     assert a.citations, "an answered question must carry citations"
-    assert "มาตรา" in spy_llm[0]["user"], "sections must be passed as context"
+    assert "ข้อ" in spy_llm[0]["user"], "sections must be passed as context"
 
 
-def test_missing_code_never_reaches_the_model(spy_llm):
-    a = run(answer_question("โดนโกงออนไลน์ ไปแจ้งความที่โรงพักไหนก็ได้ไหม"))
+def test_the_prompt_tells_the_model_the_corpus_is_narrow(spy_llm):
+    run(answer_question(ANSWERABLE))
+    system = spy_llm[0]["system"]
+    assert "จรรยาบรรณ" in system
+    assert "วินัยข้าราชการ" in system, "the nearest neighbour has to be named"
+
+
+def test_civil_service_discipline_never_reaches_the_model(spy_llm):
+    """The closest thing to this corpus that is not in it."""
+    a = run(answer_question("ข้าราชการครูทำผิดวินัยร้ายแรงมีโทษอะไรบ้าง"))
     assert not a.in_scope
     assert spy_llm == [], "a known gap must be refused before spending an LLM call"
-    assert "วิธีพิจารณาความอาญา" in a.text, "the refusal should name the code"
+    assert "ระเบียบข้าราชการครู" in a.text, "the refusal should name the act"
 
 
-def test_a_code_question_now_reaches_the_model(spy_llm):
-    """มรดก used to be refused by a coverage rule. Since ประมวลกฎหมายแพ่งและพาณิชย์
-    entered the corpus it is an ordinary answerable question, and the rule that
-    blocked it must be gone -- not merely loosened.
-
-    The claim is about the retrieval side, so it is checked there: the model was
-    called, and what it was handed was the civil code. `in_scope` is deliberately
-    not asserted -- the spy returns a canned answer citing an unrelated Act, which
-    app/verify.py then blocks, exactly as it should.
-    """
-    a = run(answer_question("พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกตกทอดแก่ใคร"))
-    assert len(spy_llm) == 1, "a code question must no longer be refused before the model"
-    assert "แพ่งและพาณิชย์" in spy_llm[0]["user"], "the civil code should be the context"
-    assert any("แพ่งและพาณิชย์" in h.citation for h in a.hits), \
-        [h.citation for h in a.hits]
+def test_licensing_never_reaches_the_model(spy_llm):
+    """Also the Teachers Council, also a regulation, and still not in the corpus."""
+    a = run(answer_question("ขอใบอนุญาตประกอบวิชาชีพครูต้องใช้เอกสารอะไรบ้าง"))
+    assert not a.in_scope
+    assert spy_llm == []
 
 
 def test_off_topic_never_reaches_the_model(spy_llm):
@@ -81,7 +87,7 @@ def test_empty_question_is_handled(spy_llm):
 
 
 def test_line_output_carries_the_disclaimer(spy_llm):
-    a = run(answer_question("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"))
+    a = run(answer_question(ANSWERABLE))
     body = a.for_line()
     assert "ไม่ใช่คำปรึกษาทางกฎหมาย" in body
     assert settings.corpus_as_of in body
@@ -92,7 +98,7 @@ def test_line_output_is_truncated(monkeypatch, spy_llm):
         return "ก" * (settings.max_answer_chars + 500)
 
     monkeypatch.setattr(answer_mod, "complete", long_answer)
-    a = run(answer_question("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"))
+    a = run(answer_question(ANSWERABLE))
     body = a.for_line()
     assert "…" in body
     assert len(body) < settings.max_answer_chars + len(answer_mod.DISCLAIMER) + 20
@@ -103,27 +109,82 @@ def test_llm_failure_still_returns_the_sections(monkeypatch):
         raise answer_mod.LLMUnavailable("no api key")
 
     monkeypatch.setattr(answer_mod, "complete", boom)
-    a = run(answer_question("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"))
+    a = run(answer_question(ANSWERABLE))
     assert a.error, "the failure should be reported"
     assert a.citations, "retrieval succeeded, so sections must still come back"
-    assert "มาตรา" in a.text
+    assert "ข้อ" in a.text
 
 
-def test_an_answer_that_wanders_into_social_security_is_blocked(spy_llm, monkeypatch):
-    """The leak adversarial testing found, and the one no earlier guard caught.
+def test_an_answer_that_names_a_regulation_we_never_supplied_is_blocked(monkeypatch):
+    """The easy fabrication in this domain, because the Council issues dozens.
 
-    Asked for severance and unemployment benefit in one sentence, the bot
-    answered from พ.ร.บ.คุ้มครองแรงงาน -- a real act, correctly cited -- and
-    invented a benefit of 1,000 baht a month that appears in no Thai law. The
-    citation check passed because nothing it named was fabricated; the gap was
-    in what it said, not in what it cited.
+    "ข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ" is a real regulation and is not in
+    this corpus. An answer citing it reads exactly like a correct one.
     """
     async def fake_complete(system, user):
-        return ("ได้ค่าชดเชยตามอายุงาน และได้รับเงินทดแทนกรณีว่างงานเดือนละ 1,000 บาท "
-                "จากกองทุนประกันสังคม (พ.ร.บ.คุ้มครองแรงงาน 2541 ม.118)")
+        return ("ครูต้องมีมาตรฐานการปฏิบัติตน "
+                "(ข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ พ.ศ. 2556 ข้อ 11)")
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
-    a = run(answer_question("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่"))
+    a = run(answer_question(ANSWERABLE))
+    assert not a.in_scope
+    assert a.error == "unsupported citations"
+
+
+def test_an_answer_that_cites_a_rule_number_out_of_thin_air_is_blocked(monkeypatch):
+    """The failure a reader cannot see.
+
+    The instrument is right, the wording is plausible, and the number sends them
+    to a rule about something else entirely.
+    """
+    async def fake_complete(system, user):
+        return ("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
+                "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 99)")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert not a.in_scope
+    assert a.error == "unsupported sections"
+    assert "ข้อ 99" in a.text
+
+
+def test_calling_a_regulations_rule_a_มาตรา_is_blocked(monkeypatch):
+    """ข้อบังคับคุรุสภา has no มาตรา, so this citation points at nothing.
+
+    It is the kind of slip that survives every other check -- the regulation is
+    real, the number is real, and the two together are not.
+    """
+    async def fake_complete(system, user):
+        return ("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
+                "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 มาตรา 7)")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert not a.in_scope
+    assert a.error == "unsupported sections"
+
+
+def test_an_answer_that_wanders_into_civil_service_discipline_is_blocked(monkeypatch):
+    """The leak no earlier guard catches.
+
+    The question is about ethics, the retrieved text is about ethics, and the
+    model answers with the penalties an employer can impose -- dismissal, pay
+    cuts -- which come from a different act with a different procedure. Nothing
+    it cited was fabricated; the gap is in what it said.
+    """
+    async def fake_complete(system, user):
+        return ("ครูที่ประพฤติผิดอาจถูกลงโทษทางวินัยตามระเบียบข้าราชการครู "
+                "ตั้งแต่ตัดเงินเดือนจนถึงปลดออก")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
     assert not a.in_scope
     assert a.error == "answer beyond corpus"
-    assert "ประกันสังคม" in a.text
+    assert "ระเบียบข้าราชการครู" in a.text
+
+
+def test_a_repealed_regulation_is_marked_in_the_context_the_model_sees(spy_llm):
+    """The model cannot prefer the current text unless it can tell them apart."""
+    run(answer_question("การสอบสวนการประพฤติผิดจรรยาบรรณทำอย่างไร"))
+    system = spy_llm[0]["system"]
+    assert "ยกเลิกแล้ว" in system, "the prompt must explain the marker"

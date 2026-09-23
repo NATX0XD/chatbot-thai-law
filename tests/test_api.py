@@ -33,15 +33,20 @@ def client():
 def test_health_reports_index_state(client):
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    assert body["chunks"] > 20000
+    # the whole corpus is ten documents, so the count is a three-figure number;
+    # a rebuild that silently produced an empty index would still be caught
+    assert body["chunks"] > 300
     assert body["corpus_as_of"] == settings.corpus_as_of
 
 
 def test_search_needs_no_llm(client):
-    body = client.get("/search", params={"q": "ค่าชดเชยเลิกจ้าง", "k": 3}).json()
+    body = client.get("/search", params={"q": "จรรยาบรรณต่อศิษย์", "k": 3}).json()
     assert body["in_scope"] is True
     assert len(body["hits"]) == 3
-    assert all("มาตรา" in h["citation"] for h in body["hits"])
+    # a citation names the rule, and the unit word is whichever the instrument
+    # uses -- ข้อ for a Council regulation, มาตรา for the Act
+    assert all(("ข้อ" in h["citation"] or "มาตรา" in h["citation"])
+               for h in body["hits"])
 
 
 def test_search_marks_off_topic(client):
@@ -52,9 +57,10 @@ def test_search_marks_off_topic(client):
 def test_chat_refuses_a_missing_code_without_an_api_key(client):
     """No Typhoon key is configured in tests; a gap question must still answer,
     because it never reaches the model."""
-    body = client.post("/chat", json={"question": "ขอประกันตัวต้องใช้หลักทรัพย์อะไร"}).json()
+    body = client.post(
+        "/chat", json={"question": "ข้าราชการครูทำผิดวินัยร้ายแรงมีโทษอะไรบ้าง"}).json()
     assert body["in_scope"] is False
-    assert "วิธีพิจารณาความอาญา" in body["answer"]
+    assert "ระเบียบข้าราชการครู" in body["answer"]
 
 
 def test_chat_rejects_an_empty_question(client):
