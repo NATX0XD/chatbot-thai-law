@@ -20,9 +20,11 @@ Five guards, catching five different failures:
   3. find_gap_in_answer -- the *answer* wandered into missing law even though the
      question did not name it.
   4. unsupported_laws -- the answer names an instrument that was never supplied.
-  5. unsupported_sections -- the answer cites a rule number that is not in the
-     evidence, or attaches the wrong unit word to it. A wrong name is visible to
-     the reader; "ตามข้อ 23" when the rule is ข้อ 13 is not.
+  5. impossible_citations -- the answer cites a rule number the instrument does
+     not have, or attaches the wrong unit word to it, or points at a sub-item
+     outside the block it names. A wrong name is visible to the reader; "ตามข้อ
+     23" when the rule is ข้อ 13 is not. Checked against the corpus rather than
+     the retrieved set, because that is a fact about the documents.
 
 None of them spends an LLM call except the last three, which read what the model
 already wrote. The model is never asked whether it should have answered.
@@ -41,8 +43,9 @@ from app.llm import LLMUnavailable, complete
 from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
-from app.support import Corpus as SupportIndex, unsupported_claims
-from app.verify import unsupported_laws, unsupported_sections
+from app.support import (
+    Corpus as SupportIndex, impossible_citations, unsupported_claims)
+from app.verify import unsupported_laws
 
 log = logging.getLogger(__name__)
 
@@ -395,9 +398,12 @@ async def answer_question(question: str) -> Answer:
                       in_scope=False, error="answer beyond corpus")
 
     citations = [h.citation for h in hits]
-    # last line of defence: the model may ignore the context and answer from its
-    # own memory. If it names a law we never supplied, the answer is fabricated.
-    invented = unsupported_laws(text, citations)
+    # last line of defence: the model may answer from its own memory. The
+    # question is whether the instrument exists at all, so it is asked of the
+    # whole corpus -- a real regulation cited from memory can still be checked,
+    # and refusing it as fabricated was costing correct answers every round.
+    invented = unsupported_laws(text, _support_index().all_citations,
+                                [h.rec["text"] for h in hits])
     if invented:
         log.warning("HALLUCINATION blocked %s | %r", invented, question[:80])
         return Answer(text=FABRICATED.format(laws=", ".join(invented[:2])),
@@ -406,17 +412,20 @@ async def answer_question(question: str) -> Answer:
     # the number matters as much as the name. An answer can cite the right
     # regulation and the wrong rule inside it, which reads as correct and sends
     # the reader to text that does not say what they were told it says.
+    # the number matters as much as the name, and it is checked against the
+    # corpus rather than the retrieved set: ข้อ 99 of a regulation with 24 rules
+    # does not exist whether or not that regulation was handed over.
+    miscited = impossible_citations(text, _support_index())
+    if miscited:
+        log.warning("MISCITED %s | %r", miscited, question[:80])
+        return Answer(text=MISCITED.format(sections=", ".join(miscited[:3])),
+                      hits=hits, in_scope=False, error="unsupported sections")
+
     unsupported = unsupported_claims(text, _support_index())
     if unsupported:
         log.warning("UNSUPPORTED CLAIM %s | %r", unsupported, question[:80])
         if settings.claim_check_blocks:
             return Answer(text=MISCITED.format(sections=", ".join(unsupported[:3])),
                           hits=hits, in_scope=False, error="unsupported claims")
-
-    miscited = unsupported_sections(text, citations, [h.rec["text"] for h in hits])
-    if miscited:
-        log.warning("MISCITED %s | %r", miscited, question[:80])
-        return Answer(text=MISCITED.format(sections=", ".join(miscited[:3])),
-                      hits=hits, in_scope=False, error="unsupported sections")
 
     return Answer(text=tidy_for_chat(text), citations=citations, hits=hits)

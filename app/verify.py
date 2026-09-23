@@ -125,16 +125,28 @@ def allowed_names(citations: list[str]) -> set[str]:
     return out
 
 
-def unsupported_laws(answer: str, citations: list[str]) -> list[str]:
-    """Laws named in the answer that were not among the retrieved sections.
+def unsupported_laws(answer: str, citations: list[str],
+                     evidence: list[str] | None = None) -> list[str]:
+    """Laws named in the answer that the corpus does not hold.
 
     Matching is prefix-based in both directions: the model may shorten
     "พระราชบัญญัติคุ้มครองแรงงาน พ.ศ. 2541" to "พ.ร.บ.คุ้มครองแรงงาน", and it may
     also name only the first words of a long title.
+
+    `citations` is every instrument in the corpus, not only the ones retrieved
+    for this question. Asking "was this handed over?" instead of "does this
+    exist?" produced a refusal saying พ.ร.บ.สภาครูฯ 2546 "ไม่มีอยู่ในคลังข้อมูล"
+    about an act with ninety-two records in it, four rounds running.
+
+    `evidence` is the text of those sections. A name that appears in the rules
+    themselves is being quoted, not invented: ข้อ 64 ของข้อบังคับฯ 2568 contains
+    the phrase "ข้อบังคับคุรุสภาว่าด้วยการอุทธรณ์คำสั่ง...", and an answer
+    repeating it was thrown away for naming a law.
     """
     allowed = allowed_names(citations)
     if not allowed:
         return []
+    quoted = " ".join(evidence or [])
     bad = []
     for raw in LAW_MENTION.findall(answer):
         if COUNCIL_HEAD.match(raw.strip()) and not NAMED.search(raw):
@@ -145,6 +157,8 @@ def unsupported_laws(answer: str, citations: list[str]) -> list[str]:
         if SELF_REF.match(name):
             continue
         if _names_the_same_law(name, allowed):
+            continue
+        if raw.strip() and raw.strip() in quoted:
             continue
         if raw.strip() not in bad:
             bad.append(raw.strip())
@@ -174,61 +188,3 @@ def _names_the_same_law(name: str, allowed: set[str]) -> bool:
         if len(short) >= MIN_CONTAINS and short in long:
             return True
     return False
-
-
-# A citation is a unit word and a number: "ข้อ 7", "มาตรา 54". Both are checked,
-# because in this corpus the unit word carries meaning -- ข้อบังคับคุรุสภา
-# numbers its rules as ข้อ and only the Act uses มาตรา, so "มาตรา 7 ของ
-# ข้อบังคับ" is a citation to something that does not exist.
-# At most three digits. The largest rule number anywhere in this corpus is 90,
-# and a four-digit number after ข้อ is a Buddhist-era year -- part of the title
-# the model just wrote, not a citation. Reading "ข้อบังคับฯ ... 2550" as a
-# citation to ข้อ 2550 rejected a correct answer about conduct towards
-# colleagues.
-SECTION_MENTION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3}(?:/[๐-๙0-9]{1,3})?)(?![๐-๙0-9])")
-THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
-
-
-# "มาตรา 9 ข้อ ๑" is one citation and a pointer into it, not two citations. The
-# model writes sub-items that way even though the prompt asks for "(๑)", and
-# reading the second half as a citation to ข้อ 1 rejected a correct answer about
-# who sets the code of ethics.
-NESTED = re.compile(
-    r"((?:ข้อ|มาตรา)\s*[๐-๙0-9]+(?:/[๐-๙0-9]+)?)"
-    r"(\s*(?:วรรค\S*\s*)?)(?:ข้อ|มาตรา)\s*[๐-๙0-9]+(?:/[๐-๙0-9]+)?"
-)
-
-
-def _pairs(text: str) -> set[tuple[str, str]]:
-    text = NESTED.sub(r"\1\2", text)
-    return {(unit, number.translate(THAI_DIGITS))
-            for unit, number in SECTION_MENTION.findall(text)}
-
-
-def unsupported_sections(answer: str, citations: list[str],
-                         texts: list[str]) -> list[str]:
-    """Rule numbers the answer cites that are nowhere in the evidence.
-
-    Two sources count as evidence: the citations of the sections that were
-    retrieved, and the cross-references inside their text -- ข้อ 16 ของ
-    ข้อบังคับฯ 2568 refers to ข้อ 12, and an answer that follows the reference is
-    reading the corpus, not inventing.
-
-    This is the check that stops the failure a reader cannot detect. A wrong act
-    name is visible; "ตามข้อ 23" when the rule is ข้อ 13 reads exactly like a
-    correct citation and sends the reader to the wrong rule.
-    """
-    allowed = set()
-    for source in list(citations) + list(texts):
-        allowed |= _pairs(source)
-    if not allowed:
-        return []
-
-    bad = []
-    for unit, number in _pairs(answer):
-        if (unit, number) in allowed:
-            continue
-        item = f"{unit} {number}"
-        if item not in bad:
-            bad.append(item)
-    return bad

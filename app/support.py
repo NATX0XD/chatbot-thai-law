@@ -57,6 +57,13 @@ THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 CITATION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3}(?:/[๐-๙0-9]{1,3})?)(?![๐-๙0-9])"
                       r"((?:\s*\([ก-ฮ๐-๙0-9]{1,3}\))*)")
 SUB_ITEM = re.compile(r"\(([ก-ฮ๐-๙0-9]{1,3})\)")
+# "มาตรา 9 ข้อ ๑" is one citation and a pointer into it, not two citations. The
+# writer keeps using ข้อ for sub-items even though the prompt asks for "(๑)",
+# and reading the second half as a citation to ข้อ 1 rejected a correct answer
+# about who sets the code of ethics.
+NESTED = re.compile(
+    r"((?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}(?:/[๐-๙0-9]{1,3})?)"
+    r"(\s*(?:วรรค\S*\s*)?)(?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}(?:/[๐-๙0-9]{1,3})?")
 # how far back to look for the instrument the citation belongs to
 NAME_WINDOW = 90
 # where a claim starts: the previous line, bullet, or closing bracket
@@ -66,6 +73,19 @@ COMMON_SHARE = 1 / 6
 # how many of the claim's rarest words have to be looked for in the cited rule
 KEY_WORDS = 3
 LETTERS = "กขคฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ"
+
+
+def _forms(marker: str) -> tuple[str, ...]:
+    """A sub-item written either way. The rules use Thai numerals throughout and
+    the writer is told to answer in Arabic ones, so "(๑)" and "(1)" are the same
+    pointer -- comparing them literally reported ข้อ 12 as having no (1)."""
+    arabic = marker.translate(THAI_DIGITS)
+    thai = arabic.translate(str.maketrans("0123456789", "๐๑๒๓๔๕๖๗๘๙"))
+    return tuple({f"({marker})", f"({arabic})", f"({thai})"})
+
+
+def _has(text: str, marker: str) -> bool:
+    return any(form in text for form in _forms(marker))
 
 
 def _missing_sub_item(markers: list[str], candidates: list[dict]) -> str | None:
@@ -88,7 +108,7 @@ def _missing_sub_item(markers: list[str], candidates: list[dict]) -> str | None:
                     if other != letters[0] and f"({other})" in after]
             cut = min([e for e in ends if e >= 0], default=len(after))
             blocks = [after[:cut]]
-        if all(any(f"({n})" in block for block in blocks) for n in numbers):
+        if all(any(_has(block, n) for block in blocks) for n in numbers):
             return None
     return "".join(f"{m})(" for m in markers)[:-2] if markers else None
 
@@ -112,6 +132,10 @@ class Corpus:
             self.by_rule[key] = rec
             self.by_unit_number.setdefault(
                 (rec.get("unit", "มาตรา"), rec["section"]), []).append(rec)
+
+        self.all_citations = [
+            f"{rec.get('short') or rec['act']} {rec.get('unit', 'มาตรา')} {rec['section']}"
+            for rec in self.by_rule.values()]
 
         self.names = {}
         for rec in records:
@@ -149,8 +173,28 @@ def _claim_before(answer: str, at: int) -> str:
     return answer[(edges[-1] if edges else 0):at]
 
 
+def impossible_citations(answer: str, corpus: Corpus) -> list[str]:
+    """Citations that point at nothing. Structural, so it cannot be wrong.
+
+    A rule number the instrument does not have, a unit word that instrument
+    never uses, a sub-item outside the block it names -- each is a fact about
+    the corpus, checked against the corpus, with no judgement about meaning.
+    That is why this one blocks and `unsupported_claims` does not.
+    """
+    return _walk(answer, corpus, lexical=False)
+
+
 def unsupported_claims(answer: str, corpus: Corpus) -> list[str]:
     """Citations whose text does not carry the sentence they are attached to."""
+    return _walk(answer, corpus, lexical=True)
+
+
+def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
+    # keep the offsets usable: the pointer is blanked, not deleted, so the
+    # claim window and the instrument lookup still measure the real distances
+    answer = NESTED.sub(lambda m: m.group(1) + m.group(2)
+                        + " " * (len(m.group(0)) - len(m.group(1)) - len(m.group(2))),
+                        answer)
     problems: list[str] = []
 
     def report(message: str) -> None:
@@ -165,18 +209,22 @@ def unsupported_claims(answer: str, corpus: Corpus) -> list[str]:
         if sysid:
             rec = corpus.by_rule.get((sysid, unit, number))
             if rec is None:
-                report(f"{unit} {number} ไม่มีอยู่ในเอกสารที่อ้าง")
+                if not lexical:
+                    report(f"{unit} {number} ไม่มีอยู่ในเอกสารที่อ้าง")
                 continue
             candidates = [rec]
         else:
             candidates = corpus.by_unit_number.get((unit, number), [])
             if not candidates:
-                report(f"ไม่มี{unit} {number} ในตัวบทฉบับใดเลย")
+                if not lexical:
+                    report(f"ไม่มี{unit} {number} ในตัวบทฉบับใดเลย")
                 continue
 
         missing = _missing_sub_item(SUB_ITEM.findall(subs), candidates)
         if missing:
             report(f"{unit} {number} ไม่มีอนุข้อ ({missing})")
+        if not lexical:
+            continue
 
         claim = _content(_claim_before(answer, match.start()))
         if len(claim) < MIN_CLAIM_WORDS:

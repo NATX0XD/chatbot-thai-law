@@ -13,7 +13,7 @@ import pytest
 
 from app.config import settings
 from app.corpus_store import open_corpus
-from app.support import Corpus, unsupported_claims
+from app.support import Corpus, impossible_citations, unsupported_claims
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -43,11 +43,19 @@ SUPPORTED = [
 @pytest.mark.parametrize("answer", SUPPORTED)
 def test_a_citation_that_carries_its_sentence_is_left_alone(corpus, answer):
     assert unsupported_claims(answer, corpus) == []
+    assert impossible_citations(answer, corpus) == []
+
+
+def test_a_sub_item_written_as_a_rule_number_is_a_pointer(corpus):
+    """"มาตรา 9 ข้อ ๑" is one citation and a pointer into it."""
+    assert impossible_citations(
+        "คุรุสภามีอำนาจกำหนดจรรยาบรรณของวิชาชีพ "
+        "(พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546 มาตรา 9 ข้อ ๑)", corpus) == []
 
 
 def test_a_rule_number_the_instrument_does_not_have(corpus):
     """ข้อบังคับฯ 2556 ends at ข้อ 15."""
-    problems = unsupported_claims(
+    problems = impossible_citations(
         "ตามข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 99 ที่กำหนดไว้", corpus)
     assert problems and "99" in problems[0]
 
@@ -58,7 +66,7 @@ def test_the_unit_word_has_to_match_the_instrument(corpus):
     The tester caught this one twice over: an answer that counted the five
     duties correctly and then attributed them to "ข้อบังคับฯ 2556 มาตรา 50".
     """
-    problems = unsupported_claims(
+    problems = impossible_citations(
         "จรรยาบรรณต่อผู้รับบริการมี 5 ข้อ ตามข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ "
         "2556 มาตรา 50", corpus)
     assert problems and "50" in problems[0]
@@ -70,7 +78,7 @@ def test_a_sub_item_pointer_has_to_land_inside_the_block_it_names(corpus):
     Looking for "(๕)" anywhere in the rule finds it, which is why this check
     reads the lettered block rather than the whole text.
     """
-    problems = unsupported_claims(
+    problems = impossible_citations(
         "ครูปิดบังข้อมูลจนงานเสียหาย "
         "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 8 (ก)(๕))", corpus)
     assert problems and "(ก)(๕)" in problems[0]
@@ -122,3 +130,11 @@ def test_it_ships_switched_off(corpus):
     """Turning it on means re-measuring the flag rate on correct answers first,
     not re-deciding. See app/support.py for what has to be fixed."""
     assert settings.claim_check_blocks is False
+
+
+def test_the_structural_checks_are_the_ones_that_block(corpus):
+    """They read the corpus and make no judgement about meaning, so they cannot
+    produce a false positive the way the lexical check can."""
+    wrong_pairing = WRONG_PAIRINGS[0][0]
+    assert impossible_citations(wrong_pairing, corpus) == []
+    assert unsupported_claims(wrong_pairing, corpus)
