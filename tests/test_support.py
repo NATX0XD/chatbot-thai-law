@@ -84,6 +84,35 @@ def test_a_sub_item_pointer_has_to_land_inside_the_block_it_names(corpus):
     assert problems and "(ก)(๕)" in problems[0]
 
 
+def test_a_shortened_instrument_name_does_not_hand_the_citation_to_its_neighbour(
+        corpus):
+    """The false positive round six caught, the first hour this check was on.
+
+    The writer names instruments its own way. "แบบแผนพฤติกรรม 2550" matches no
+    name in the corpus, so the search walked back past it to ข้อบังคับฯ 2556 --
+    named earlier in the same sentence -- and read ข้อ 8 (ข)(๑) against ข้อ 8 of
+    the wrong regulation, which has no lettered blocks at all. It then refused a
+    correct answer on the ground that the sub-item did not exist. It does: ข้อ 8
+    (ข)(๑) ของข้อบังคับฯ 2550 is "ปิดบังข้อมูลข่าวสารในการปฏิบัติงาน จนทำให้เกิด
+    ความเสียหาย" -- which was the answer to the question.
+    """
+    assert impossible_citations(
+        "ครูปิดบังข้อมูลจนงานเสียหาย ผิดจรรยาบรรณต่อผู้ร่วมประกอบวิชาชีพ "
+        "ตามข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14 "
+        "และแบบแผนพฤติกรรม 2550 ข้อ 8 (ข)(๑)", corpus) == []
+
+
+def test_a_sub_item_no_instrument_has_is_still_impossible(corpus):
+    """Attribution got a second reader, not an exemption.
+
+    Widening to the whole corpus is what makes the message true: the sub-item is
+    reported missing only when no rule of that number anywhere has it.
+    """
+    assert impossible_citations(
+        "ครูปิดบังข้อมูล (ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 "
+        "ข้อ 8 (ก)(๙))", corpus)
+
+
 WRONG_PAIRINGS = [
     # ข้อ 10 is about fostering learning; it contains no หลักวิชา
     ("ครูใช้หลักวิชาการที่ไม่ถูกต้องจนศิษย์เสียหาย ถือว่าผิด "

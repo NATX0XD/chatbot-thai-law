@@ -57,6 +57,8 @@ THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 CITATION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3}(?:/[๐-๙0-9]{1,3})?)(?![๐-๙0-9])"
                       r"((?:\s*\([ก-ฮ๐-๙0-9]{1,3}\))*)")
 SUB_ITEM = re.compile(r"\(([ก-ฮ๐-๙0-9]{1,3})\)")
+# the Buddhist year in an instrument's name, which identifies it on its own
+YEAR = re.compile(r"25[0-9]{2}")
 # "มาตรา 9 ข้อ ๑" is one citation and a pointer into it, not two citations. The
 # writer keeps using ข้อ for sub-items even though the prompt asks for "(๑)",
 # and reading the second half as a citation to ข้อ 1 rejected a correct answer
@@ -138,10 +140,17 @@ class Corpus:
             for rec in self.by_rule.values()]
 
         self.names = {}
+        years: dict[str, set[str]] = {}
         for rec in records:
             for name in (rec.get("short"), rec.get("act")):
                 if name:
                     self.names[name] = rec["sysid"]
+                    for year in YEAR.findall(name):
+                        years.setdefault(year, set()).add(rec["sysid"])
+        # every instrument here carries a different year, so a bare "2550" names
+        # one of them unambiguously. Kept only where that holds.
+        self.by_year = {year: next(iter(ids)) for year, ids in years.items()
+                        if len(ids) == 1}
 
         seen = Counter()
         for rec in records:
@@ -151,13 +160,25 @@ class Corpus:
         self.distinctive = {word for word, n in seen.items() if n <= cutoff}
 
     def instrument_before(self, text: str, at: int) -> str | None:
-        """Which instrument the citation at `at` belongs to, if it says."""
+        """Which instrument the citation at `at` belongs to, if it says.
+
+        The year is read alongside the names, and whichever sits closest to the
+        citation wins. Names alone were not enough: the writer shortens them
+        ("แบบแผนพฤติกรรม 2550" for a regulation the corpus calls ข้อบังคับคุรุสภา
+        ว่าด้วยแบบแผนพฤติกรรมตามจรรยาบรรณของวิชาชีพ พ.ศ. 2550), and a shortened
+        name matches nothing, so the search kept walking back to whatever
+        instrument was named earlier in the sentence and attributed the citation
+        to that one. Round six blocked a correct answer that way -- ข้อ 8 (ข)(๑)
+        of ข้อบังคับฯ 2550 read against ข้อ 8 of ข้อบังคับฯ 2556, which has no
+        lettered blocks at all, and the refusal said the sub-item did not exist.
+        """
         window = text[max(0, at - NAME_WINDOW):at]
         best = None
-        for name, sysid in self.names.items():
-            found = window.rfind(name)
-            if found >= 0 and (best is None or found > best[0]):
-                best = (found, sysid)
+        for table in (self.names, self.by_year):
+            for key, sysid in table.items():
+                found = window.rfind(key)
+                if found >= 0 and (best is None or found > best[0]):
+                    best = (found, sysid)
         return best[1] if best else None
 
 
@@ -220,8 +241,15 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
                     report(f"ไม่มี{unit} {number} ในตัวบทฉบับใดเลย")
                 continue
 
-        missing = _missing_sub_item(SUB_ITEM.findall(subs), candidates)
-        if missing:
+        markers = SUB_ITEM.findall(subs)
+        missing = _missing_sub_item(markers, candidates)
+        if missing and _missing_sub_item(
+                markers, corpus.by_unit_number.get((unit, number), [])):
+            # only when no instrument in the corpus has that sub-item under that
+            # number. Attribution can still be wrong -- the writer's names are
+            # not the corpus's -- and this check blocks the whole answer, so it
+            # is worth the second read to make the claim one about the corpus
+            # rather than about which instrument the sentence seemed to mean.
             report(f"{unit} {number} ไม่มีอนุข้อ ({missing})")
         if not lexical:
             continue
