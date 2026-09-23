@@ -95,7 +95,10 @@ def test_line_output_carries_the_disclaimer(spy_llm):
 
 def test_line_output_is_truncated(monkeypatch, spy_llm):
     async def long_answer(system, user):
-        return "ก" * (settings.max_answer_chars + 500)
+        # varied text, not one repeated character: a long run of the same thing
+        # is what looks_degenerate exists to reject, and it would reject this
+        return " ".join(f"ประโยคที่ {i} ว่าด้วยจรรยาบรรณของวิชาชีพทางการศึกษา"
+                        for i in range(60))
 
     monkeypatch.setattr(answer_mod, "complete", long_answer)
     a = run(answer_question(ANSWERABLE))
@@ -181,6 +184,66 @@ def test_an_answer_that_wanders_into_civil_service_discipline_is_blocked(monkeyp
     assert not a.in_scope
     assert a.error == "answer beyond corpus"
     assert "ระเบียบข้าราชการครู" in a.text
+
+
+PROSE_ABOUT_REGULATIONS = [
+    "ข้อบังคับไม่ได้ระบุว่าการเล่นการพนันทุกรูปแบบผิดจรรยาบรรณ",
+    "ข้อบังคับฉบับนี้มีผลใช้บังคับตั้งแต่วันถัดจากวันประกาศในราชกิจจานุเบกษา",
+    "ข้อบังคับเดิมที่เกี่ยวข้องทั้งหมดถูกยกเลิกแล้ว",
+    "ตามข้อบังคับที่เกี่ยวข้อง และข้อบังคับคุรุสภาไม่ได้กำหนดไว้",
+    "ข้อบังคับว่าด้วยจรรยาบรรณของวิชาชีพ แบ่งออกเป็น 5 ด้าน",
+]
+
+
+@pytest.mark.parametrize("sentence", PROSE_ABOUT_REGULATIONS)
+def test_ordinary_prose_about_a_regulation_is_not_a_fabricated_citation(
+        monkeypatch, sentence):
+    """ข้อบังคับ is this corpus's everyday noun, not only the start of a title.
+
+    Reading these as instrument names rejected twelve of fifty correct answers
+    in acceptance testing, including the one asking which regulation is in force.
+    """
+    async def fake_complete(system, user):
+        return ("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
+                "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7) "
+                + sentence)
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert a.error is None, a.text[:200]
+    assert a.in_scope
+
+
+def test_a_sub_item_pointer_is_not_read_as_a_second_citation(monkeypatch):
+    """"มาตรา 9 ข้อ ๑" is one citation and a pointer into it."""
+    async def fake_complete(system, user):
+        return ("คุรุสภามีอำนาจกำหนดจรรยาบรรณ "
+                "(พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546 มาตรา 9 ข้อ ๑)")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question("ใครเป็นคนกำหนดจรรยาบรรณของวิชาชีพครู"))
+    assert a.error is None, a.text[:200]
+
+
+def test_an_answer_that_collapses_into_repetition_is_not_sent(monkeypatch):
+    """Two acceptance cases came back as "ข้อ 8 ข้อ 8 ข้อ 8" for hundreds of
+    characters. It cites nothing and claims nothing, so every other guard
+    passes it, and the reader gets a cut-off answer with no content in it."""
+    async def fake_complete(system, user):
+        return "ครูพึงช่วยเหลือเกื้อกูลกัน " + "ข้อ 8 " * 200
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert a.error == "degenerate answer"
+    assert a.citations, "retrieval worked, so the sections still come back"
+
+
+def test_the_context_says_which_chapter_each_rule_sits_in(spy_llm):
+    """ข้อบังคับฯ 2550 states the same five duties once per kind of practitioner."""
+    run(answer_question("ศึกษานิเทศก์ต้องมีวินัยในตนเองตามข้อไหน"))
+    context = spy_llm[0]["user"]
+    assert "(อยู่ใน หมวด" in context
+    assert "ส่วนที่" in context
 
 
 def test_a_repealed_regulation_is_marked_in_the_context_the_model_sees(spy_llm):

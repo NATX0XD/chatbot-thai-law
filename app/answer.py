@@ -95,10 +95,20 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
    ให้ใช้ฉบับที่ไม่ได้ถูกยกเลิก และบอกผู้ใช้ได้ว่าฉบับเก่าถูกยกเลิกไปแล้ว
 5. ถ้าตัวบทไม่พอจะตอบ บอกตรง ๆ ว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้ ห้ามเดา
    โดยเฉพาะคำถามที่ถามหาตัวเลข เช่น จำนวนชั่วโมงอบรม ถ้าตัวบทไม่ได้กำหนดไว้ ให้บอกว่าไม่ได้กำหนด
+   ห้ามเติมเงื่อนไข ระยะเวลา หรือขั้นตอนที่ตัวบทไม่ได้เขียน แม้จะฟังดูสมเหตุสมผลก็ตาม
+6. ตัวบทแต่ละชิ้นมีบรรทัด "(อยู่ใน หมวด ... > ส่วนที่ ...)" กำกับ ให้อ่านก่อนตอบเสมอ
+   ข้อบังคับแบบแผนพฤติกรรม 2550 เขียนจรรยาบรรณห้าด้านซ้ำสี่รอบ รอบละหนึ่งประเภทผู้ประกอบวิชาชีพ
+   คือ ครู ผู้บริหารสถานศึกษา ผู้บริหารการศึกษา และศึกษานิเทศก์
+   ถ้าคำถามถามถึงครู ห้ามตอบด้วยข้อของผู้บริหารหรือศึกษานิเทศก์
+7. ถ้ามีทั้งข้อบังคับจรรยาบรรณ 2556 และแบบแผนพฤติกรรม 2550 ให้ยึด 2556 เป็นตัวหลักที่วางหลัก
+   แล้วใช้ 2550 เป็นตัวอย่างพฤติกรรมประกอบ
+8. ถ้าคำถามถามจำนวน เช่น มีกี่ข้อ มีกี่อย่าง ให้นับจากตัวบทที่ให้มาเท่านั้น
+   และถ้ารายการในตัวบทมีหลายข้อ ต้องยกให้ครบทุกข้อ ห้ามตัดทิ้ง
 6. ถ้าถูกขอให้ช่วยหลบเลี่ยงการถูกร้องเรียนหรือการสอบสวน ให้ปฏิเสธ
    แล้วอธิบายกระบวนการและสิทธิชี้แจงตามตัวบทแทน
-7. อธิบายด้วยภาษาที่คนทั่วไปเข้าใจ ห้ามคัดลอกตัวบทมาทั้งดุ้น
-8. ถ้ามีตัวเลขสำคัญ เช่น จำนวนวัน จำนวนคน ให้ระบุเป็นเลขอารบิก
+9. อธิบายด้วยภาษาที่คนทั่วไปเข้าใจ ห้ามคัดลอกตัวบทมาทั้งดุ้น
+10. ถ้ามีตัวเลขสำคัญ เช่น จำนวนวัน จำนวนคน ให้ระบุเป็นเลขอารบิก
+11. ห้ามเขียนคำหรือวลีเดิมซ้ำติดกันหลายครั้ง ถ้าไม่มีอะไรจะเขียนต่อแล้วให้จบคำตอบ
 
 รูปแบบสำหรับหน้าจอแชท
 - ย่อหน้าแรกคือคำตอบตรง ๆ 1-2 ประโยค ต้องอ่านจบแล้วได้คำตอบทันที
@@ -185,10 +195,33 @@ async def phrase_refusal(question: str, gap) -> str:
 
 
 def build_context(hits: list[Hit]) -> str:
+    """The retrieved rules, each under the headings it sits below.
+
+    The headings are not decoration. ข้อบังคับฯ 2550 states the same five duties
+    four times over, once per kind of practitioner, and its rules read
+    "ศึกษานิเทศก์ พึง..." only in the first line -- so without the chapter above
+    them an answer about a classroom teacher can be written out of the rule for
+    a district administrator, which acceptance testing caught it doing.
+    """
     blocks = []
     for i, h in enumerate(hits, start=1):
-        blocks.append(f"[{i}] {h.citation}\n{h.rec['text']}")
+        head = f"[{i}] {h.citation}"
+        chapters = h.rec.get("chapters") or []
+        if chapters:
+            head += "\n    (อยู่ใน " + " > ".join(chapters) + ")"
+        blocks.append(f"{head}\n{h.rec['text']}")
     return "\n\n".join(blocks)
+
+
+# The model occasionally collapses into repeating one short phrase -- "ข้อ 8
+# ข้อ 8 ข้อ 8" for hundreds of characters, until the answer is cut off with no
+# content in it at all. Two acceptance cases came back that way. Every guard
+# below passes such an answer, because it cites nothing and claims nothing.
+DEGENERATE_RUN = re.compile(r"(.{2,40}?)\1{9,}")
+
+
+def looks_degenerate(text: str) -> bool:
+    return bool(DEGENERATE_RUN.search(text))
 
 
 async def answer_question(question: str) -> Answer:
@@ -244,6 +277,15 @@ async def answer_question(question: str) -> Answer:
                   f"แต่พบตัวบทที่เกี่ยวข้องดังนี้\n\n{listing}"),
             citations=[h.citation for h in hits],
             hits=hits, error=str(exc))
+
+    if looks_degenerate(text):
+        log.warning("DEGENERATE answer | %r", question[:80])
+        listing = "\n\n".join(f"• {h.citation}\n{h.rec['text'][:400]}" for h in hits[:3])
+        return Answer(
+            text=("ระบบสรุปคำตอบผิดพลาดครั้งนี้ "
+                  f"แต่พบตัวบทที่เกี่ยวข้องดังนี้\n\n{listing}"),
+            citations=[h.citation for h in hits],
+            hits=hits, error="degenerate answer")
 
     # the answer may drift into law the corpus does not hold without ever naming
     # it as a citation -- social security explained out of labour law is the case

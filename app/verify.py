@@ -31,22 +31,43 @@ STOP = r"(?!และ|หรือ|ตาม|กับ|ซึ่ง|โดย|�
 # refusal message quoted half a paragraph back at the user.
 TAIL = rf"(?:[ \t]+{STOP}[^\s(),]+){{0,6}}"
 
-# how a law gets named in an answer: a code, or an act in long or short form, or
-# -- since the corpus became the Teachers Council's -- a regulation or a notice
-# it issued. Those two had to be added because they are what a fabricated
-# citation in this domain would look like: the model knows คุรุสภา issues
-# ข้อบังคับ, so inventing "ข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ" is the easy
-# mistake, and without them here nothing would have noticed.
+# How a law gets named in an answer: a code, an act in long or short form, or a
+# regulation of the Teachers Council.
+#
+# The Council's instruments need their own shape, and a loose one is worse than
+# none. "ข้อบังคับ" is this corpus's everyday noun -- an ordinary sentence says
+# "ข้อบังคับไม่ได้ระบุว่า...", "ข้อบังคับฉบับนี้มีผลใช้บังคับ...", "ข้อบังคับ
+# ที่เกี่ยวข้อง" -- and a pattern that reads those as titles rejected twelve of
+# fifty correct answers in acceptance testing, including the one asking which
+# regulation is currently in force.
+#
+# What separates a citation from the noun is punctuation Thai does not usually
+# use: a real title has a space after ข้อบังคับคุรุสภา, or runs straight into
+# ว่าด้วย. Prose glues the next word on instead. That is the whole distinction,
+# and NAMED below adds a second condition -- the span must carry a year or the
+# word ว่าด้วย -- so that "ข้อบังคับคุรุสภา กำหนดว่า..." cannot slip through.
+SHORT_TAIL = rf"(?:[ \t]+{STOP}[^\s(),]+){{0,4}}"
+COUNCIL = (
+    rf"ข้อบังคับ[^\s(),]*ว่าด้วย[^\s(),]*{SHORT_TAIL}"
+    rf"|ข้อบังคับ(?:คุรุสภา|ฯ)[ \t]+{STOP}[^\s(),]+{SHORT_TAIL}"
+    rf"|ประกาศคณะกรรมการคุรุสภา[^\s(),]*{SHORT_TAIL}"
+)
+
 LAW_MENTION = re.compile(
     r"(ประมวลรัษฎากร"
     r"|ประมวลกฎหมาย[ก-๙]+(?:และ[ก-๙]+)?"
-    rf"|ข้อบังคับ[^\s(),]*{TAIL}"
-    rf"|ประกาศคณะกรรมการ[^\s(),]*{TAIL}"
+    rf"|{COUNCIL}"
     rf"|พระราชบัญญัติ[^\s(),]*{TAIL}"
     rf"|พระราชกำหนด[^\s(),]*{TAIL}"
     rf"|พ\.?\s?ร\.?\s?บ\.?\s?[^\s(),]*{TAIL}"
     rf"|พ\.?\s?ร\.?\s?ก\.?\s?[^\s(),]*{TAIL})"
 )
+
+# A Council instrument is only named when the span says which one: a year, or
+# ว่าด้วย followed by the subject. Without this, the second alternative above
+# still matches "ข้อบังคับคุรุสภา กำหนดว่า…".
+NAMED = re.compile(r"ว่าด้วย|[๐-๙0-9]{4}")
+COUNCIL_HEAD = re.compile(r"^(?:ข้อบังคับ|ประกาศคณะกรรมการ)")
 
 NOISE = re.compile(r"(พ\.?\s?ศ\.?\s*[๐-๙0-9]*|มาตรา\s*[๐-๙0-9/()]*|ม\.\s*[๐-๙0-9/()]*"
                    # the unit word of a Council regulation, and the abbreviation
@@ -110,6 +131,8 @@ def unsupported_laws(answer: str, citations: list[str]) -> list[str]:
         return []
     bad = []
     for raw in LAW_MENTION.findall(answer):
+        if COUNCIL_HEAD.match(raw.strip()) and not NAMED.search(raw):
+            continue
         name = normalise(raw)
         if len(name) < 4:
             continue
@@ -155,7 +178,18 @@ SECTION_MENTION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]+(?:/[
 THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
 
+# "มาตรา 9 ข้อ ๑" is one citation and a pointer into it, not two citations. The
+# model writes sub-items that way even though the prompt asks for "(๑)", and
+# reading the second half as a citation to ข้อ 1 rejected a correct answer about
+# who sets the code of ethics.
+NESTED = re.compile(
+    r"((?:ข้อ|มาตรา)\s*[๐-๙0-9]+(?:/[๐-๙0-9]+)?)"
+    r"(\s*(?:วรรค\S*\s*)?)(?:ข้อ|มาตรา)\s*[๐-๙0-9]+(?:/[๐-๙0-9]+)?"
+)
+
+
 def _pairs(text: str) -> set[tuple[str, str]]:
+    text = NESTED.sub(r"\1\2", text)
     return {(unit, number.translate(THAI_DIGITS))
             for unit, number in SECTION_MENTION.findall(text)}
 

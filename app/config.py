@@ -64,7 +64,11 @@ class Settings(BaseSettings):
     # --- retrieval ---
     top_k_dense: int = 30
     top_k_bm25: int = 30
-    top_k_final: int = 6
+    # How many rules the model is shown. Raised from 6 after acceptance testing:
+    # "จรรยาบรรณต่อผู้รับบริการมีกี่ข้อ" was answered "1 ข้อ" because only one of
+    # the five had been retrieved. Measured with ingest/tune_fusion.py, recall of
+    # the rule that answers the question goes 96% -> 98% at 8 and stops there.
+    top_k_final: int = 8
     rrf_k: int = 60
     # Fusion weights. On the general-law corpus dense carried far more signal
     # than BM25 -- a short Thai query tokenises into common words that score high
