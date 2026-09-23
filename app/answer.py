@@ -109,6 +109,10 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
 9. อธิบายด้วยภาษาที่คนทั่วไปเข้าใจ ห้ามคัดลอกตัวบทมาทั้งดุ้น
 10. ถ้ามีตัวเลขสำคัญ เช่น จำนวนวัน จำนวนคน ให้ระบุเป็นเลขอารบิก
 11. ห้ามเขียนคำหรือวลีเดิมซ้ำติดกันหลายครั้ง ถ้าไม่มีอะไรจะเขียนต่อแล้วให้จบคำตอบ
+12. คำว่า "ต้อง" กับ "พึง" ในตัวบทมีน้ำหนักต่างกัน ต้องคัดลอกมาให้ตรงตามที่ตัวบทใช้
+    ห้ามเปลี่ยน "พึง" เป็น "ต้อง" หรือกลับกัน
+13. ถ้าจะอ้างอนุข้อหรือวรรค เช่น (ก) (ข) (๑) ต้องแน่ใจว่าข้อความนั้นอยู่ในอนุข้อนั้นจริง
+    ถ้าไม่แน่ใจ ให้อ้างเฉพาะเลขข้อ ดีกว่าอ้างอนุข้อผิด
 
 รูปแบบสำหรับหน้าจอแชท
 - ย่อหน้าแรกคือคำตอบตรง ๆ 1-2 ประโยค ต้องอ่านจบแล้วได้คำตอบทันที
@@ -194,6 +198,43 @@ async def phrase_refusal(question: str, gap) -> str:
                                  where=gap.where, fallback=gap.message())
 
 
+# Whenever a duty is in play, the rules that state it come along. ข้อบังคับฯ
+# 2556 หมวด 3 holds five of them, and retrieving one of the five is how
+# "จรรยาบรรณต่อผู้รับบริการมีกี่ข้อ" came back as "1 ข้อ" twice over. Only
+# ข้อบังคับฯ 2556 is pulled in this way: it is fifteen rules long, none of its
+# chapters holds more than five, and it is the document that states the duties
+# rather than illustrating them -- so the cost is bounded and the gain is that
+# an answer always has the rule itself in front of it, not only an example.
+STATES_THE_DUTIES = "ksp-2556"
+
+
+def with_chapter_siblings(hits: list[Hit], corpus) -> list[Hit]:
+    """Add the rules that share a duty with something already retrieved."""
+    # Read the duty off whatever was retrieved, not only off 2556. A question
+    # answered entirely out of ข้อบังคับฯ 2550 -- which is most of them, since
+    # that is where the worked examples are -- should still be shown the rule
+    # that states the duty, and 2550 records carry the same label.
+    wanted = {h.rec.get("ethics_category") for h in hits if h.rec.get("ethics_category")}
+    if not wanted:
+        return hits
+    have = {h.rec["id"] for h in hits}
+    extra = [Hit(rec=rec, rrf=0.0) for rec in corpus
+             if rec["sysid"] == STATES_THE_DUTIES
+             and rec.get("ethics_category") in wanted
+             and rec["id"] not in have]
+    return hits + extra
+
+
+def order_for_reading(hits: list[Hit]) -> list[Hit]:
+    """Put the regulation that states the duties first, ranking aside.
+
+    ข้อบังคับฯ 2556 states each duty; ข้อบังคับฯ 2550 illustrates it with worked
+    examples. An answer should rest on the first and quote the second, and the
+    model follows whichever it reads first.
+    """
+    return sorted(hits, key=lambda h: h.rec["sysid"] != STATES_THE_DUTIES)
+
+
 def build_context(hits: list[Hit]) -> str:
     """The retrieved rules, each under the headings it sits below.
 
@@ -265,6 +306,10 @@ async def answer_question(question: str) -> Answer:
     log.info("ANSWERING dense=%.4f top=%s | %r",
              result.max_dense, hits[0].citation if hits else "-", question[:80])
 
+    # Everything downstream reads this list, not the raw ranking: the guards
+    # have to judge the answer against exactly what the model was shown, or
+    # citing a rule that was added as a chapter sibling looks like an invention.
+    hits = order_for_reading(with_chapter_siblings(hits, get_retriever().corpus))
     user_prompt = (f"คำถามของประชาชน\n{question}\n\n"
                    f"ตัวบทที่ค้นได้\n{build_context(hits)}")
     try:
@@ -291,7 +336,7 @@ async def answer_question(question: str) -> Answer:
     # it as a citation -- social security explained out of labour law is the case
     # this was written for. Checked before the citation guard because a leak of
     # this kind cites nothing wrong; there is simply nothing behind what it says.
-    strayed = find_gap_in_answer(text)
+    strayed = find_gap_in_answer(text, [h.rec["text"] for h in hits])
     if strayed:
         log.warning("REFUSED answer-side gap=%s | %r", strayed.topic, question[:80])
         return Answer(text=await phrase_refusal(question, strayed), hits=hits,

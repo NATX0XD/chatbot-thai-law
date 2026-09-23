@@ -246,6 +246,66 @@ def test_the_context_says_which_chapter_each_rule_sits_in(spy_llm):
     assert "ส่วนที่" in context
 
 
+def test_a_duty_arrives_with_every_rule_that_states_it(spy_llm):
+    """หมวด 3 ของข้อบังคับฯ 2556 holds five rules, and the question is how many.
+
+    Retrieving one of the five is how "จรรยาบรรณต่อผู้รับบริการมีกี่ข้อ" came
+    back as "1 ข้อ" -- an answer that is wrong, short, and confident.
+    """
+    run(answer_question("จรรยาบรรณต่อผู้รับบริการมีกี่ข้อ"))
+    context = spy_llm[0]["user"]
+    for section in ("ข้อ 9", "ข้อ 10", "ข้อ 11", "ข้อ 12", "ข้อ 13"):
+        assert f"จรรยาบรรณของวิชาชีพ 2556 {section}" in context, section
+
+
+def test_the_regulation_that_states_the_duties_is_read_first(spy_llm):
+    """2556 states each duty; 2550 illustrates it. The answer should rest on the
+    first and quote the second, and the model follows whichever it reads first."""
+    run(answer_question("จรรยาบรรณต่อตนเองของครูคืออะไร"))
+    context = spy_llm[0]["user"]
+    first = context.index("จรรยาบรรณของวิชาชีพ 2556")
+    later = context.index("แบบแผนพฤติกรรมตามจรรยาบรรณ 2550")
+    assert first < later
+
+
+def test_a_rule_added_as_a_chapter_sibling_may_be_cited(monkeypatch):
+    """The guards judge the answer against what the model was shown, not against
+    the raw ranking -- otherwise the rules just added look like inventions."""
+    async def fake_complete(system, user):
+        return ("จรรยาบรรณต่อผู้รับบริการมี 5 ข้อ "
+                "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 9) "
+                "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 13)")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question("จรรยาบรรณต่อผู้รับบริการมีกี่ข้อ"))
+    assert a.error is None, a.text[:200]
+
+
+def test_quoting_the_corpus_about_dismissal_is_not_straying(monkeypatch):
+    """ข้อ 71 ของข้อบังคับฯ 2568 lists an employer's order to dismiss as a ground
+    for suspending a licence. An answer repeating that is reading the corpus."""
+    async def fake_complete(system, user):
+        return ("คุรุสภาพักใช้ใบอนุญาตได้เมื่อหน่วยงานต้นสังกัดมีคำสั่ง"
+                "ปลดออกหรือไล่ออก "
+                "(ข้อบังคับคุรุสภา การพิจารณาการประพฤติผิดจรรยาบรรณ 2568 ข้อ 71)")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(
+        "กรณีไหนที่คุรุสภาสั่งพักใช้ใบอนุญาตได้ทันทีโดยไม่ต้องรอผลสอบสวน"))
+    assert a.error is None, a.text[:200]
+
+
+def test_a_year_in_a_title_is_not_read_as_a_rule_number(monkeypatch):
+    """The largest rule number in this corpus is 90; 2550 is a year."""
+    async def fake_complete(system, user):
+        return ("ครูต้องช่วยเหลือเกื้อกูลกัน "
+                "ตามข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 8")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question("ครูนินทาเพื่อนครูผิดไหม"))
+    assert a.error is None, a.text[:200]
+
+
 def test_a_repealed_regulation_is_marked_in_the_context_the_model_sees(spy_llm):
     """The model cannot prefer the current text unless it can tell them apart."""
     run(answer_question("การสอบสวนการประพฤติผิดจรรยาบรรณทำอย่างไร"))

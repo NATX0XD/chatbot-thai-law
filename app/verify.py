@@ -174,7 +174,12 @@ def _names_the_same_law(name: str, allowed: set[str]) -> bool:
 # because in this corpus the unit word carries meaning -- ข้อบังคับคุรุสภา
 # numbers its rules as ข้อ and only the Act uses มาตรา, so "มาตรา 7 ของ
 # ข้อบังคับ" is a citation to something that does not exist.
-SECTION_MENTION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]+(?:/[๐-๙0-9]+)?)")
+# At most three digits. The largest rule number anywhere in this corpus is 90,
+# and a four-digit number after ข้อ is a Buddhist-era year -- part of the title
+# the model just wrote, not a citation. Reading "ข้อบังคับฯ ... 2550" as a
+# citation to ข้อ 2550 rejected a correct answer about conduct towards
+# colleagues.
+SECTION_MENTION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3}(?:/[๐-๙0-9]{1,3})?)(?![๐-๙0-9])")
 THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
 

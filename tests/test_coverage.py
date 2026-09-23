@@ -124,6 +124,22 @@ def test_quoting_the_corpus_own_reference_to_the_criminal_code_is_not_straying()
     assert answer_beyond_corpus(citing) is not None
 
 
+def test_repeating_a_phrase_from_the_evidence_is_not_straying():
+    """ข้อ 71 ของข้อบังคับฯ 2568 lists an employer's order to dismiss as a ground
+    for suspending a licence, so an answer repeating it is reading the corpus.
+
+    Without this the rule meant to catch drift into the civil-service discipline
+    act rejected the one question หมวด 13 exists to answer, and told the asker
+    the corpus does not cover it -- worse than a technical refusal, because they
+    believe it.
+    """
+    evidence = ["หน่วยงานต้นสังกัดมีคำสั่ง ปลดออกหรือไล่ออกหรือเลิกจ้าง"]
+    quoting = "คุรุสภาพักใช้ใบอนุญาตได้เมื่อต้นสังกัดมีคำสั่งปลดออกหรือไล่ออก"
+    assert answer_beyond_corpus(quoting, evidence) is None
+    # the same words with no such section retrieved are still a leak
+    assert answer_beyond_corpus(quoting, []) is not None
+
+
 def test_an_ordinary_ethics_answer_passes_the_answer_side_check():
     ordinary = ("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
                 "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7)")

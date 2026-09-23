@@ -189,9 +189,19 @@ BEYOND_CORPUS = (
 )
 
 
-def answer_beyond_corpus(answer: str) -> Gap | None:
-    """A gap the *answer* wandered into, even though the question did not name it."""
+def answer_beyond_corpus(answer: str, evidence: list[str] | None = None) -> Gap | None:
+    """A gap the *answer* wandered into, even though the question did not name it.
+
+    An answer that repeats a phrase from the sections it was given has not
+    wandered anywhere. ข้อ 71 ของข้อบังคับฯ 2568 lists, as a ground for
+    suspending a licence, that the employer has ordered "ปลดออกหรือไล่ออก" --
+    so an answer quoting it trips a rule meant to catch answers that drift into
+    the civil-service discipline act. That rejected the one question the whole
+    หมวด 13 exists to answer, and told the asker the corpus does not cover it.
+    """
+    haystack = " ".join(evidence or [])
     for pattern, topic, code, where in BEYOND_CORPUS:
-        if pattern.search(answer):
+        found = pattern.search(answer)
+        if found and found.group() not in haystack:
             return Gap(topic, code, pattern, where)
     return None
