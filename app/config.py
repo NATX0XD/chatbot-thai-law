@@ -66,45 +66,64 @@ class Settings(BaseSettings):
     top_k_bm25: int = 30
     top_k_final: int = 6
     rrf_k: int = 60
-    # Fusion weights. Dense carries far more signal than BM25 on Thai questions:
-    # a short query like "เจ้าหนี้ทวงหนี้ตี 1 ผิดไหม" tokenises into common words
-    # that score high on BM25 against unrelated acts, which pushed the section
-    # that answers it out of the results entirely.
+    # Fusion weights. On the general-law corpus dense carried far more signal
+    # than BM25 -- a short Thai query tokenises into common words that score high
+    # against 29,485 unrelated sections -- and 3.0:0.25 was measured over 6,994
+    # labelled questions.
     #
-    # 2.0:0.5 was chosen on the twelve hand-written probes in ingest/tune_fusion.py,
-    # against a corpus that did not yet hold the codes. Re-measured with
-    # `python -m ingest.eval_retrieval --n 0 --split all --grid` over all 6,994
-    # labelled questions, best of a 32-point grid:
+    # That reverses on this corpus, and the reason is its size. 334 chunks of
+    # Council regulations share very little vocabulary: "เพิกถอนใบอนุญาต" and
+    # "แตกความสามัคคี" appear in a handful of rules each, so an exact word match
+    # is strong evidence rather than a coincidence. Re-measured with
+    # `python -m ingest.tune_fusion` over the fifty labelled questions in
+    # data/eval/ksp_questions.jsonl:
     #
-    #                      hit@1  hit@3  hit@6   MRR@6
-    #   3.0:0.25 (here)    60.7%  77.0%  83.6%   0.694
-    #   2.0:0.5  (was)     59.0%  75.4%  83.7%   0.680
-    #   dense only         60.3%  76.5%  82.6%   0.689
-    #   BM25 only          44.0%  58.1%  64.9%   0.516
+    #                      doc@1  doc@3  rule@1  rule@6
+    #   1.0:1.0 (here)      78%    96%     68%     96%
+    #   3.0:0.25 (was)      82%    88%     66%     92%
+    #   dense only          82%    90%     58%     92%
     #
-    # +1.7 points of hit@1 and +1.6 of hit@3 for -0.1 of hit@6 -- the first two are
-    # ~120 questions each, the last is 7, which is noise. BM25 still earns its place:
-    # dropping it entirely costs a full point of hit@6, which is the metric that
-    # decides whether the answer is reachable at all.
-    weight_dense: float = 3.0
-    weight_bm25: float = 0.25
-    # Seats reserved for the dense retriever's own best results, so a chunk it
-    # ranks first cannot be pushed out by RRF. BM25 gets none: its top hit on a
-    # short Thai query is frequently irrelevant.
+    # rule@6 is the metric that decides whether a correct answer is reachable at
+    # all, and it is the one that improves. doc@1 gives up two questions for
+    # three on doc@3 and two on rule@6; on fifty probes none of those margins is
+    # large, but they all point the same way.
+    weight_dense: float = 1.0
+    weight_bm25: float = 1.0
+    # Seats reserved for each retriever's own best results, so a chunk it ranks
+    # first cannot be pushed out by RRF's known failure -- a hit ranked #1 by one
+    # retriever and absent from the other's list scores 1/61, below two mid-table
+    # hits that score ~1/31 each.
     #
-    # At the weights above the grid scores guarantee 0 and guarantee 2 identically
-    # -- dense already wins the top two seats on its own, so the reservation never
-    # fires. Kept anyway: it costs nothing today and is what stops a future weight
-    # change from silently evicting the best dense hit.
+    # BM25 used to get none of these, because its top hit on a short Thai query
+    # was frequently irrelevant against a corpus of 733 acts. With the weights
+    # above, giving it one seat is worth a point of doc@3 and a point of rule@6.
+    # A superseded rule can never take a reserved seat; see app/retriever.py.
     guarantee_top: int = 2
+    guarantee_bm25: int = 1
     # The in-scope gate reads the raw cosine, not the fused RRF score -- RRF depends
     # on rank alone, so an off-topic question and a perfect match get the same value.
-    # Calibrated by ingest/calibrate.py: on-topic probes bottom out at 0.592 and
-    # off-topic ones top out at 0.496, so 0.54 sits in the gap.
-    # BM25 is deliberately NOT part of this gate: off-topic questions reach 15.1
-    # while a valid one can sit at 12.6, so the sparse score carries no signal about
-    # whether the corpus knows the answer. It still drives ranking.
-    min_dense_sim: float = 0.54   # BGE-M3 cosine
+    #
+    # Re-measured on the teacher-ethics corpus with `python -m ingest.calibrate`
+    # over the sixty-five probes in data/eval/ksp_questions.jsonl:
+    #
+    #   answerable                     0.524 – 0.822
+    #   not a legal question           0.318 – 0.397
+    #   legal, but not in this corpus  0.438 – 0.742
+    #
+    # The first two separate cleanly and 0.46 sits in the gap; the old 0.54 was
+    # calibrated against a corpus 88 times larger and refused one answerable
+    # question outright.
+    #
+    # The third group overlaps the first completely, and always will: every one
+    # of those questions is about a teacher and retrieves a real Council
+    # regulation. No threshold can separate them, which is what app/coverage.py
+    # is for.
+    #
+    # BM25 is deliberately NOT part of this gate: a question about a teacher's
+    # pay scores 41.8 while an answerable one can sit at 9.3, so the sparse score
+    # carries no signal about whether the corpus knows the answer. It still
+    # drives ranking.
+    min_dense_sim: float = 0.46   # BGE-M3 cosine
 
     # --- reranking ---
     # Off until measured. See app/rerank.py for why, and run

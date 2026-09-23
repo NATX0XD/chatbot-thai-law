@@ -21,6 +21,13 @@ What is measured, per question:
 
 Dense-only and BM25-only are scored from the same retrieval calls, so the cost of
 the comparison is one embedding request per question rather than three.
+
+This script measures the *general-law* corpus only. WangchanX contains no
+questions about the professional ethics of educators -- it is drawn from business
+and capital-markets law -- so running it against corpus_ksp.jsonl would report a
+near-zero hit rate that says nothing about the bot. It refuses to run in that
+case; ingest/tune_fusion.py and ingest/calibrate.py are the equivalents for the
+teacher-ethics corpus, and they read data/eval/ksp_questions.jsonl.
 """
 from __future__ import annotations
 
@@ -119,7 +126,17 @@ def fuse(dense, sparse, w_dense, w_bm25, guarantee, corpus, top_k=TOP_K):
     return sorted(selected[:top_k], key=lambda i: -fused[i])
 
 
+def _needs_the_general_law_corpus() -> None:
+    if os.path.basename(settings.corpus_path) != "corpus.jsonl":
+        sys.exit(
+            f"ชุดคำถาม WangchanX วัดได้เฉพาะคลังกฎหมายทั่วไป แต่ตอนนี้ตั้งไว้ที่ "
+            f"{os.path.basename(settings.corpus_path)}\n"
+            "    สลับด้วย  CORPUS_FILE=corpus.jsonl python -m ingest.eval_retrieval\n"
+            "    หรือใช้  python -m ingest.tune_fusion  สำหรับคลังจรรยาบรรณครู")
+
+
 def main() -> None:
+    _needs_the_general_law_corpus()
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=400, help="0 = every eligible question")
     ap.add_argument("--split", default="test", choices=["test", "train", "all"])

@@ -1,82 +1,142 @@
 # -*- coding: utf-8 -*-
-"""Grid-search the fusion weights against probes with a known correct act+section.
+"""Grid-search the fusion weights against the labelled evaluation set.
 
 Records how settings.weight_dense / weight_bm25 / guarantee_top were chosen.
 Re-run after changing the embedding model or the corpus:
 
     python -m ingest.tune_fusion
 
-Reported metrics: act@1 / act@3 = the governing act appears at rank 1 / within
-top 3. sec@1 / sec@6 = the exact section that answers the question.
+Probes come from data/eval/ksp_questions.jsonl -- the fifty answerable ones,
+each labelled with the rules that answer it as "sysid:section". Reported:
+
+    doc@1   the right document is the top hit
+    doc@3   it appears in the top three
+    rule@1  the exact rule that answers the question is the top hit
+    rule@6  it appears anywhere in what the model is shown
+
+rule@6 is the one that decides whether a correct answer is reachable at all;
+the others describe how much work the model has to do to find it.
+
+The supersession penalty is applied here exactly as app/retriever.py applies it,
+because leaving it out would tune the weights against a ranking the bot does not
+actually serve.
 """
 import itertools
+import json
 import os
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import numpy as np
-from app.config import settings
-from app.query_expand import expand
-from app.retriever import Retriever, SECTION_Q_RE, THAI_DIGITS
+from app.config import DATA_DIR, settings  # noqa: E402
+from app.query_expand import expand  # noqa: E402
+from app.retriever import (  # noqa: E402
+    SECTION_Q_RE, SUPERSEDED_PENALTY, THAI_DIGITS, Retriever,
+)
+
+EVAL_PATH = os.path.join(DATA_DIR, "eval", "ksp_questions.jsonl")
 
 R = Retriever()
 
-# (question, act substring, section that actually answers it or None)
-PROBES = [
-    ("เจ้าหนี้ทวงหนี้ตี 1 ผิดไหม", "ทวงถามหนี้", "9"),
-    ("เจ้าหนี้โทรทวงหนี้ตอนตี 1 ผิดกฎหมายไหม", "ทวงถามหนี้", "9"),
-    ("ทวงหนี้ตอนดึกได้ไหม", "ทวงถามหนี้", "9"),
-    ("โดนไล่ออก ได้เงินไหม", "คุ้มครองแรงงาน", "118"),
-    ("ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่", "คุ้มครองแรงงาน", "118"),
-    ("ลาพักร้อนกี่วัน", "คุ้มครองแรงงาน", "30"),
-    ("ลาคลอดได้กี่วัน", "คุ้มครองแรงงาน", "41"),
-    ("นายจ้างหักเงินเดือนได้ไหม", "คุ้มครองแรงงาน", "76"),
-    ("ทำโอทีได้เงินเท่าไหร่", "คุ้มครองแรงงาน", None),
-    ("บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม", "ข้อมูลส่วนบุคคล", None),
-    ("ขอลบข้อมูลส่วนตัวได้ไหม", "ข้อมูลส่วนบุคคล", None),
-    ("คุ้มครองแรงงาน มาตรา 118", "คุ้มครองแรงงาน", "118"),
-]
+
+def probes():
+    """(question, {"sysid:section", ...}) for every answerable, labelled entry."""
+    if not os.path.exists(EVAL_PATH):
+        sys.exit(f"ไม่พบชุดประเมิน {EVAL_PATH}")
+    out = []
+    with open(EVAL_PATH, encoding="utf-8") as handle:
+        for line in handle:
+            entry = json.loads(line)
+            if entry["expect"] == "answer" and entry["gold_ids"]:
+                out.append((entry["question"], set(entry["gold_ids"])))
+    return out
+
+
+PROBES = probes()
+
+
+def key(rec) -> str:
+    return f"{rec['sysid']}:{rec['section']}"
+
 
 def run(w_dense, w_bm25, g_dense, g_bm25, top_k=6):
-    act1 = sec1 = act3 = sec6 = 0
-    for q, act, sec in PROBES:
-        query, _ = expand(q.translate(THAI_DIGITS))
-        dense, dscore = R._dense(query, settings.top_k_dense)
-        sparse, bscore = R._sparse(query, settings.top_k_bm25)
+    doc1 = doc3 = rule1 = rule6 = 0
+    for question, gold in PROBES:
+        gold_docs = {g.split(":")[0] for g in gold}
+        query, _ = expand(question.translate(THAI_DIGITS))
+        dense, _dscore = R._dense(query, settings.top_k_dense)
+        sparse, _bscore = R._sparse(query, settings.top_k_bm25)
+
         fused = {}
-        for ranking, w in ((dense, w_dense), (sparse, w_bm25)):
+        for ranking, weight in ((dense, w_dense), (sparse, w_bm25)):
             for rank, idx in enumerate(ranking):
                 idx = int(idx)
-                fused[idx] = fused.get(idx, 0.0) + w / (settings.rrf_k + rank + 1)
+                fused[idx] = fused.get(idx, 0.0) + weight / (settings.rrf_k + rank + 1)
+
         wanted = set(SECTION_Q_RE.findall(query))
         for idx in list(fused):
             if wanted and R.corpus[idx]["section"] in wanted:
                 fused[idx] += 0.5
-        sel = []
-        for idx in [int(i) for i in dense[:g_dense]] + [int(i) for i in sparse[:g_bm25]]:
-            if idx not in sel: sel.append(idx)
-        for idx in sorted(fused, key=lambda i: -fused[i]):
-            if len(sel) >= top_k: break
-            if idx not in sel: sel.append(idx)
-        order = sorted(sel[:top_k], key=lambda i: -fused[i])
-        recs = [R.corpus[i] for i in order]
-        if recs and act in recs[0]["act"]: act1 += 1
-        if any(act in r["act"] for r in recs[:3]): act3 += 1
-        if sec:
-            if recs and act in recs[0]["act"] and recs[0]["section"] == sec: sec1 += 1
-            if any(act in r["act"] and r["section"] == sec for r in recs): sec6 += 1
-    n, ns = len(PROBES), sum(1 for _,_,s in PROBES if s)
-    return act1, act3, sec1, sec6, n, ns
+            if R.corpus[idx].get("superseded_by"):
+                fused[idx] *= SUPERSEDED_PENALTY
 
-print(f"{'w_dense':>7} {'w_bm25':>6} {'gD':>3} {'gB':>3} | {'act@1':>6} {'act@3':>6} {'sec@1':>6} {'sec@6':>6}")
-best = None
-for wd, wb, gd, gb in itertools.product([1.0, 1.5, 2.0, 3.0], [0.3, 0.5, 1.0], [1, 2, 3], [0, 1, 2]):
-    a1, a3, s1, s6, n, ns = run(wd, wb, gd, gb)
-    score = (a1 + a3 + s1 + s6)
-    if best is None or score > best[0]: best = (score, wd, wb, gd, gb, a1, a3, s1, s6)
-    if (wd, wb) in [(1.0,1.0),(2.0,0.5),(3.0,0.5)] and gb in (0,2):
-        print(f"{wd:>7} {wb:>6} {gd:>3} {gb:>3} | {a1:>3}/{n:<2} {a3:>3}/{n:<2} {s1:>3}/{ns:<2} {s6:>3}/{ns:<2}")
-print()
-print("BEST:", f"w_dense={best[1]} w_bm25={best[2]} guarantee_dense={best[3]} guarantee_bm25={best[4]}",
-      f"-> act@1 {best[5]}/{len(PROBES)}  act@3 {best[6]}/{len(PROBES)}  sec@1 {best[7]}  sec@6 {best[8]}")
-a1,a3,s1,s6,n,ns = run(1.0,1.0,2,2)
-print("CURRENT (w 1:1, guarantee 2/2):", f"act@1 {a1}/{n}  act@3 {a3}/{n}  sec@1 {s1}/{ns}  sec@6 {s6}/{ns}")
+        selected = []
+        for idx in [int(i) for i in dense[:g_dense]] + [int(i) for i in sparse[:g_bm25]]:
+            if idx not in selected and not R.corpus[idx].get("superseded_by"):
+                selected.append(idx)
+        for idx in sorted(fused, key=lambda i: -fused[i]):
+            if len(selected) >= top_k:
+                break
+            if idx not in selected:
+                selected.append(idx)
+        recs = [R.corpus[i] for i in sorted(selected[:top_k], key=lambda i: -fused[i])]
+
+        if recs and recs[0]["sysid"] in gold_docs:
+            doc1 += 1
+        if any(r["sysid"] in gold_docs for r in recs[:3]):
+            doc3 += 1
+        if recs and key(recs[0]) in gold:
+            rule1 += 1
+        if any(key(r) in gold for r in recs):
+            rule6 += 1
+    return doc1, doc3, rule1, rule6
+
+
+def pct(n):
+    return f"{n:>3}/{len(PROBES):<3} {n / len(PROBES):>5.0%}"
+
+
+def main():
+    print(f"{len(PROBES)} labelled questions from {EVAL_PATH}\n")
+    header = (f"{'w_dense':>7} {'w_bm25':>6} {'gD':>3} {'gB':>3} | "
+              f"{'doc@1':>11} {'doc@3':>11} {'rule@1':>11} {'rule@6':>11}")
+    print(header)
+
+    best = None
+    for wd, wb, gd, gb in itertools.product([1.0, 1.5, 2.0, 3.0],
+                                            [0.0, 0.25, 0.5, 1.0],
+                                            [0, 1, 2, 3], [0, 1, 2]):
+        d1, d3, r1, r6 = run(wd, wb, gd, gb)
+        # rule@6 decides reachability, so it is weighted above the rest
+        score = 2 * r6 + r1 + d1 + d3
+        if best is None or score > best[0]:
+            best = (score, wd, wb, gd, gb, d1, d3, r1, r6)
+        if (wd, wb) in [(3.0, 0.25), (2.0, 0.5), (3.0, 0.0)] and (gd, gb) in ((2, 0), (0, 0)):
+            print(f"{wd:>7} {wb:>6} {gd:>3} {gb:>3} | "
+                  f"{pct(d1)} {pct(d3)} {pct(r1)} {pct(r6)}")
+
+    print()
+    print(f"BEST: w_dense={best[1]} w_bm25={best[2]} "
+          f"guarantee_dense={best[3]} guarantee_bm25={best[4]}")
+    print(f"      doc@1 {pct(best[5])}  doc@3 {pct(best[6])}  "
+          f"rule@1 {pct(best[7])}  rule@6 {pct(best[8])}")
+
+    d1, d3, r1, r6 = run(settings.weight_dense, settings.weight_bm25,
+                         settings.guarantee_top, settings.guarantee_bm25)
+    print(f"CURRENT: w_dense={settings.weight_dense} w_bm25={settings.weight_bm25} "
+          f"guarantee_top={settings.guarantee_top} "
+          f"guarantee_bm25={settings.guarantee_bm25}")
+    print(f"      doc@1 {pct(d1)}  doc@3 {pct(d3)}  rule@1 {pct(r1)}  rule@6 {pct(r6)}")
+
+
+if __name__ == "__main__":
+    main()

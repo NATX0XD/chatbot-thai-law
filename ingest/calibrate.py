@@ -1,71 +1,54 @@
 # -*- coding: utf-8 -*-
-"""Pick the in-scope thresholds from data instead of guessing them.
+"""Pick the in-scope threshold from data instead of guessing it.
 
-Runs two sets of probes through the retriever and reports the score distributions:
-questions the corpus should answer, and questions it must refuse -- including the
-hard case of legal questions whose law is genuinely missing from the corpus
-(tenancy, inheritance, defamation), which a naive threshold happily answers wrong.
+Runs the evaluation set through the retriever and reports the score
+distributions for the questions the corpus should answer and the ones it must
+refuse, then says where the two separate.
 
     python -m ingest.calibrate
+
+The probes live in data/eval/ksp_questions.jsonl rather than in this file, so
+that the same sixty questions drive the threshold here and the ranking metrics
+in ingest/eval_retrieval.py, and adding a probe means editing data rather than
+editing three scripts.
+
+The refusals split into two kinds, and only one of them is a threshold's job:
+
+  off topic       not a legal question at all. These score low and the gate
+                  catches them.
+  out of scope    a real legal question whose governing law is not in this
+                  corpus. These score *high* -- every one of them is about a
+                  teacher -- and app/coverage.py catches them instead.
 """
+import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app.config import settings  # noqa: E402
+from app.config import DATA_DIR, settings  # noqa: E402
 from app.coverage import find_gap  # noqa: E402
 from app.retriever import Retriever  # noqa: E402
 
-IN_SCOPE = [
-    "ถูกเลิกจ้างกะทันหัน ได้ค่าชดเชยเท่าไหร่",
-    "ทำงานครบหนึ่งปี ลาพักผ่อนประจำปีได้กี่วัน",
-    "นายจ้างหักเงินเดือนได้ไหม",
-    "ลาคลอดได้กี่วัน ได้เงินไหม",
-    "เจ้าหนี้โทรทวงหนี้ตอนกลางคืนได้ไหม",
-    "คนทวงหนี้ไปบอกที่ทำงานว่าเราเป็นหนี้ ผิดไหม",
-    "ลูกจ้างประสบอันตรายจากการทำงาน นายจ้างต้องจ่ายอะไรบ้าง",
-    "บริษัทเก็บข้อมูลส่วนตัวต้องขอความยินยอมไหม",
-    "ขอให้ลบข้อมูลส่วนบุคคลของเราได้ไหม",
-    "ซื้อของออนไลน์แล้วของไม่ตรงปก ร้องเรียนที่ไหน",
-    "ทำงานล่วงเวลาได้ค่าจ้างเท่าไหร่",
-    "นายจ้างไม่จ่ายค่าจ้าง ต้องทำยังไง",
-    "ขับรถชนแล้วหนี มีโทษอะไร",
-    "ลูกจ้างอายุต่ำกว่า 18 ทำงานอะไรไม่ได้บ้าง",
-    # the two codes. Every one of these was in MISSING_LAW before they were added.
-    "เจ้าของบ้านยึดเงินมัดจำ ทำอะไรได้บ้าง",
-    "พ่อเสียชีวิตไม่ได้ทำพินัยกรรม มรดกแบ่งยังไง",
-    "โดนด่าในเฟซบุ๊ก ฟ้องหมิ่นประมาทได้ไหม",
-    "จดทะเบียนสมรสแล้วอยากหย่า ต้องทำยังไง",
-    "ให้เพื่อนยืมเงินแล้วไม่คืน ฟ้องได้ไหม",
-    "เพื่อนขโมยของในร้าน มีความผิดอะไร",
-    # พ.ร.บ.คอมพิวเตอร์, rebuilt from the Gazette after the codes went in
-    "แฮกเข้าระบบคนอื่นมีโทษอะไร",
-    "โพสต์ข้อมูลเท็จในเฟซบุ๊กผิดไหม",
-]
+EVAL_PATH = os.path.join(DATA_DIR, "eval", "ksp_questions.jsonl")
 
-# genuinely not legal questions -- must always refuse
-OFF_TOPIC = [
-    "สูตรทำต้มยำกุ้งใส่อะไรบ้าง",
-    "ทีมไหนชนะฟุตบอลโลกครั้งล่าสุด",
-    "ช่วยเขียนโค้ด python อ่านไฟล์ csv หน่อย",
-    "พรุ่งนี้ฝนจะตกไหม",
-    "แนะนำร้านกาแฟแถวอารีย์",
-]
+# The out-of-scope half of the evaluation set is split again here, by whether a
+# coverage rule exists for it. That split is what the report is about, so it is
+# computed rather than written down.
 
-# legal, but the governing law is not in this corpus -- the dangerous middle case.
-#
-# This list was replaced wholesale when the two substantive codes were added. It
-# used to hold มัดจำ, มรดก, หมิ่นประมาท, หย่า and กู้ยืม; all five now retrieve the
-# section that governs them, so keeping them here would have measured the corpus
-# refusing questions it can answer. What is genuinely absent is procedure.
-MISSING_LAW = [
-    "โดนโกงออนไลน์ ไปแจ้งความที่โรงพักไหนก็ได้ไหม",
-    "ขอประกันตัวในชั้นสอบสวนต้องใช้หลักทรัพย์เท่าไหร่",
-    "ศาลตัดสินแล้วลูกหนี้ไม่จ่าย จะยึดทรัพย์บังคับคดียังไง",
-    "ส่งเงินสมทบประกันสังคมครบ 15 ปี ได้บำนาญเท่าไหร่",
-    "ผู้ประกันตนมาตรา 39 ส่งเงินสมทบเดือนละเท่าไหร่",
-]
 
+def load():
+    if not os.path.exists(EVAL_PATH):
+        sys.exit(f"ไม่พบชุดประเมิน {EVAL_PATH}")
+    with open(EVAL_PATH, encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle]
+
+
+def split(entries):
+    answerable = [e["question"] for e in entries if e["expect"] == "answer"]
+    refusable = [e["question"] for e in entries if e["expect"] == "refuse"]
+    covered = [q for q in refusable if find_gap(q)]
+    uncovered = [q for q in refusable if not find_gap(q)]
+    return answerable, covered, uncovered
 
 def report(name, questions, retriever):
     print(f"\n{'=' * 78}\n{name}\n{'=' * 78}")
@@ -88,9 +71,11 @@ def main():
     if r.vectors is None:
         sys.exit("dense index missing -- run: python -m ingest.build_index --dense")
 
+    entries = load()
+    IN_SCOPE, MISSING_LAW, OFF_TOPIC = split(entries)
     good = report("IN SCOPE (ต้องตอบได้)", IN_SCOPE, r)
-    bad = report("OFF TOPIC (ต้องปฏิเสธ)", OFF_TOPIC, r)
-    missing = report("LEGAL BUT LAW MISSING (ต้องปฏิเสธ)", MISSING_LAW, r)
+    bad = report("OFF TOPIC (ไม่มีกฎดัก ต้องตกด่านคะแนน)", OFF_TOPIC, r) or [(0.0, 0.0)]
+    missing = report("OUT OF SCOPE (มีกฎดัก ต้องปฏิเสธ)", MISSING_LAW, r) or [(0.0, 0.0)]
 
     print(f"\n{'=' * 78}\nTHRESHOLD SEPARATION\n{'=' * 78}")
     lo_good = min(d for d, _ in good)

@@ -223,7 +223,9 @@ class Retriever:
         # dense hit at 0.667 -- below its own neighbours 119 to 122. So each
         # retriever's best few results keep a seat regardless of the fused score.
         selected: list[int] = []
-        for idx in [int(i) for i in dense[:settings.guarantee_top]]:
+        reserved = ([int(i) for i in dense[:settings.guarantee_top]]
+                    + [int(i) for i in sparse[:settings.guarantee_bm25]])
+        for idx in reserved:
             # the reserved seats exist to protect the best *usable* hit; handing
             # one to a repealed rule would undo the penalty applied above
             if idx not in selected and not self.corpus[idx].get("superseded_by"):
