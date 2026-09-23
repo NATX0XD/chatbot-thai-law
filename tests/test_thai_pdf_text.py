@@ -89,6 +89,14 @@ def test_legacy_does_not_normalise_away_the_bytes_it_needs():
     assert from_legacy("…") == "ษ"
 
 
+def test_the_second_block_of_shifted_marks_comes_back_as_marks():
+    """cp874 decodes 0x92..0x97 into punctuation, so these read as text, not damage."""
+    for byte, want in ((0x92, "ั"), (0x93, "็"), (0x95, "ี"), (0x96, "ึ"), (0x97, "ื")):
+        assert LEGACY_EXTRA[byte] == want
+    # "ต้องเป“นผู้" is the shape the 2546 Act arrived in, 129 times
+    assert from_legacy("\u2021ª\xecπ") == "เป็น"
+
+
 def test_legacy_extra_covers_the_shifted_marks():
     for byte in (0x88, 0x89, 0x8A, 0x8B, 0x8C):
         assert LEGACY_EXTRA[byte] in "่้๊๋์"
@@ -138,6 +146,18 @@ def test_sara_am_left_undone_is_caught():
     """pythainlp splits ดําเนิน into two words, so BM25 stops matching."""
     problems = check(GOOD + " การดําเนินการ")
     assert any("ำ" in p for p in problems)
+
+
+def test_punctuation_wedged_into_a_word_is_caught():
+    """The 0x92..0x97 failure leaves text that reads as Thai with odd quotes."""
+    problems = check(GOOD + " ผู้ใดต้องเป\u201cนผู้ประกอบวิชาชีพ")
+    assert any("วรรคตอน" in p for p in problems)
+
+
+def test_a_real_quotation_is_not_mistaken_for_damage():
+    """Every one of these regulations quotes its own defined terms."""
+    quoted = GOOD + " \u201cกระทรวง\u201d หมายความว่า กระทรวงศึกษาธิการ"
+    assert not any("วรรคตอน" in p for p in check(quoted))
 
 
 def test_control_characters_are_caught():

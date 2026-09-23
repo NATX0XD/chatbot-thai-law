@@ -107,7 +107,10 @@ FURNITURE = re.compile(
 # is a rule anyone can be judged against
 TAIL = re.compile(r"(?m)^\s*(?:ประกาศ\s*ณ\s*วันที่|ผู้รับสนองพระบรมราชโองการ|หมายเหตุ\s*:-)")
 
-HEADING = re.compile(r"^\s*(หมวด|ส่วนที่)\s+([๐-๙0-9]+)\s*$")
+# "หมวดที่ ๔" appears once, in ข้อบังคับฯ 2550, where the other three chapters
+# are written "หมวด ๑". Missing it filed ศึกษานิเทศก์'s five rules under the
+# chapter for ผู้บริหารการศึกษา.
+HEADING = re.compile(r"^\s*(หมวด|ส่วนที่)(?:ที่)?\s+([๐-๙0-9]+)\s*$")
 # the space after the number is optional: the 2546 Act's typesetter ran eight of
 # them together, "มาตรา ๑๐คุรุสภาอาจมีรายได้", one for every multiple of ten
 UNIT = re.compile(r"^\s*(ข้อ|มาตรา)\s+([๐-๙0-9]+(?:/[๐-๙0-9]+)?)\s*(\D.*)$")

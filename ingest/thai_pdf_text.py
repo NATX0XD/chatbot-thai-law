@@ -78,9 +78,24 @@ PUA_MAP = {
 # Act uses around every defined term; both were read off the definitions in
 # มาตรา 4. 0x83 is the shifted mai ek again, used only after ฝ. 0xDC is a thin
 # space the typesetter left between "พ.ศ." and the year.
+#
+# 0x92 through 0x97 are a second block of shifted marks, and the reason they are
+# listed separately is that cp874 *does* decode them -- into curly quotes and a
+# bullet. So they come back looking like punctuation rather than like damage:
+# "เป็น" reads as "เป“น" and "ปี" as "ป•", 170 times, while every ratio stays
+# healthy. Each was read off the word it broke:
+#
+#   92  ป’จจุบัน -> ปัจจุบัน      95  ประจำป• -> ประจำปี
+#   93  เป“นผู้ -> เป็นผู้        96  ฝ–กอบรม -> ฝึกอบรม
+#   97  ฝ่าฝ—น -> ฝ่าฝืน
+#
+# 0x91 and 0x94 never appear in this document, so they are left out rather than
+# guessed at; STRAY_MARK below is what catches them if another document uses one.
 LEGACY_EXTRA = {
     0x83: "่", 0x88: "่", 0x89: "้", 0x8A: "๊", 0x8B: "๋",
-    0x8C: "์", 0x8D: "“", 0x8E: "”", 0xDC: " ",
+    0x8C: "์", 0x8D: "“", 0x8E: "”",
+    0x92: "ั", 0x93: "็", 0x95: "ี", 0x96: "ึ", 0x97: "ื",
+    0xDC: " ",
 }
 
 THAI = re.compile(r"[฀-๿]")
@@ -94,6 +109,10 @@ PUA = re.compile(r"[-]")
 # and "ค าวินิจฉัย" for "คำวินิจฉัย", 43 times, while every ratio still looks
 # healthy. Those documents have to be read by OCR instead.
 SPLIT_SARA = re.compile(r"[ก-ฮ]\s+[าำ]")
+# Punctuation wedged between two Thai letters. A real quotation mark opens after
+# a space and closes before one, so this shape only happens when a shifted mark
+# came back as punctuation -- the failure the 0x92..0x97 block above caused.
+STRAY_MARK = re.compile(r"[\u0e01-\u0e2e][\u2018\u2019\u201c\u201d\u2022\u2013\u2014][\u0e01-\u0e5b]")
 CONTROL = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
 # words that appear in all ten documents; their absence means the page came out
@@ -214,6 +233,13 @@ def check(text: str) -> list[str]:
 
     if "ํา" in text:
         problems.append("เหลือ ํ+า ที่ยังไม่รวมเป็น ำ")
+
+    stray = STRAY_MARK.findall(text)
+    if stray:
+        problems.append(
+            f"มีเครื่องหมายวรรคตอนคั่นกลางคำไทย {len(stray)} จุด เช่น {stray[0]!r} "
+            "— น่าจะเป็นวรรณยุกต์ที่ถอดไม่ออก"
+        )
 
     split = SPLIT_SARA.findall(text)
     if split:
