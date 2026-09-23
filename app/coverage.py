@@ -2,23 +2,30 @@
 """Deterministic detection of questions this corpus cannot answer.
 
 Similarity scores cannot catch these. A question whose governing text is missing
-still retrieves a real, on-topic Act -- to the retriever that looks exactly like a
-successful search, and the model then writes a confident answer out of a statute
-that does not contain the rule. Only a rule that knows what is absent can stop it.
+still retrieves a real, on-topic section -- to the retriever that looks exactly
+like a successful search, and the model then writes a confident answer out of a
+regulation that does not contain the rule. Only a rule that knows what is absent
+can stop it.
 
-The set of gaps shrank when the two substantive codes were added to the corpus:
-questions about tenancy, inheritance, divorce, loans, theft and defamation now
-retrieve the section that governs them. What is still missing is the procedural
-codes -- ป.วิ.แพ่ง and ป.วิ.อาญา -- and พ.ร.บ.ประกันสังคม, which do not appear in
-any open dataset the project could find. พ.ร.บ.คอมพิวเตอร์ was in that list until
-it was rebuilt from the Royal Gazette transcriptions on Wikisource; see
-ingest/extract_computer_act.py.
+This corpus is narrow on purpose: ten documents of the Teachers Council, 324
+rules in all, about the professional ethics of educators. Everything else in Thai
+law is absent. That inverts the job of this module. It used to list the few gaps
+in a corpus of 733 acts; it now has to hold a line around a small island, and the
+dangerous questions are the ones standing just offshore:
 
-That makes the surviving rules a line between substance and procedure. The
-criminal code defines theft and its penalty; it says nothing about how to file a
-report, how bail is granted, or how a judgment is enforced. Patterns therefore
-target procedural vocabulary (แจ้งความ, ประกันตัว, บังคับคดี) and deliberately no
-longer touch the substantive words (ลักทรัพย์, มรดก, หย่า) that used to be here.
+    ข้าราชการครูทำผิดวินัยร้ายแรงมีโทษอะไร   cosine 0.655, well above the gate
+    ขอใบอนุญาตประกอบวิชาชีพครูใช้เอกสารอะไร   the Council, the wrong regulation
+    โรงเรียนหักเงินเดือนครูได้ไหม            about a teacher, not about ethics
+
+All three are about teachers, all three retrieve plausible text, and none of
+them can be answered from what is here. Professional discipline (จรรยาบรรณ) and
+civil-service discipline (วินัย) in particular are two separate bodies of rules
+with two separate procedures and two separate sets of penalties, and confusing
+them is the single most likely way this bot could mislead a teacher.
+
+So each rule below names the law that does govern the question, and says where
+to go. A refusal that explains which instrument the answer lives in is worth
+more than a refusal that just says no.
 """
 from __future__ import annotations
 
@@ -26,14 +33,28 @@ import re
 from dataclasses import dataclass
 
 
+KSP = ("แนะนำให้ติดต่อคุรุสภา ksp.or.th หรือสายด่วน 02 280 6366 "
+       "หรือดูตัวบทฉบับเต็มที่ ksp.or.th/laws")
 LAWYER = ("แนะนำให้ดูตัวบทที่ krisdika.go.th หรือปรึกษาทนายความ "
           "หรือติดต่อสภาทนายความ สายด่วน 1167 สำหรับคำปรึกษาเบื้องต้นฟรี")
 REVENUE = ("แนะนำให้ดูที่กรมสรรพากร rd.go.th หรือสายด่วน 1161 "
            "ซึ่งมีเครื่องคำนวณภาษีและคู่มือการยื่นแบบให้ด้วย")
-SOCIAL_SECURITY = (
-    "แนะนำให้ดูที่สำนักงานประกันสังคม sso.go.th หรือสายด่วน 1506\n\n"
-    "ถ้าคำถามของคุณมีเรื่องกฎหมายแรงงานปนอยู่ด้วย เช่น ค่าชดเชย วันลา หรือค่าล่วงเวลา "
-    "ลองถามแยกเฉพาะส่วนนั้น ผมตอบส่วนนั้นได้ครับ")
+LABOUR = ("แนะนำให้ติดต่อกรมสวัสดิการและคุ้มครองแรงงาน labour.go.th "
+          "หรือสายด่วน 1506 กด 3")
+OBEC = ("แนะนำให้ปรึกษาต้นสังกัดหรือสำนักงานเขตพื้นที่การศึกษา "
+        "หรือดูตัวบทที่ krisdika.go.th")
+
+
+# Vocabulary that only a question about this corpus uses. It decides whether a
+# softer rule below applies: "ผิดจรรยาบรรณแล้วติดคุกไหม" is a fair question about
+# what the Council can and cannot do, and refusing it as a criminal-law question
+# because it contains the word คุก would be wrong. "ลักทรัพย์ติดคุกกี่ปี", with
+# no ethics word anywhere, is a criminal-law question and has to be refused.
+ETHICS = re.compile(
+    "จรรยาบรรณ|คุรุสภา|แบบแผนพฤติกรรม|ประพฤติผิด|มาตรฐานวิชาชีพ"
+    "|วิชาชีพทางการศึกษา|พักใช้ใบอนุญาต|เพิกถอนใบอนุญาต|ตักเตือน|ภาคทัณฑ์"
+    "|อุทธรณ์คำวินิจฉัย|คณะกรรมการมาตรฐานวิชาชีพ"
+)
 
 
 @dataclass(frozen=True)
@@ -41,104 +62,122 @@ class Gap:
     topic: str
     code: str
     pattern: re.Pattern
-    # a refusal is more useful when it says where to go instead; the default is
-    # the bar association, but a tax question belongs at the revenue department
+    # a refusal is more useful when it says where to go instead
     where: str = LAWYER
+    # A hard rule fires even when the question is worded in ethics vocabulary,
+    # because the two bodies of law overlap in wording and differ in substance --
+    # civil-service discipline is the case this exists for. A soft rule defers to
+    # the ethics vocabulary, so that a question about what the Council may do is
+    # not mistaken for a question about the criminal code.
+    hard: bool = True
 
     def message(self) -> str:
         return (
             f"คำถามนี้อยู่ในเรื่อง{self.topic} ซึ่งกำกับโดย{self.code}\n\n"
-            f"คลังข้อมูลของระบบยังไม่มี{self.code} ผมจึงตอบไม่ได้ และจะไม่เดาให้ครับ\n\n"
+            f"คลังข้อมูลของระบบมีเฉพาะจรรยาบรรณวิชาชีพทางการศึกษาตามข้อบังคับคุรุสภา "
+            f"ยังไม่มี{self.code} ผมจึงตอบไม่ได้ และจะไม่เดาให้ครับ\n\n"
             f"{self.where}"
         )
 
 
 def _p(*words: str) -> re.Pattern:
-    # case-insensitive so that a user who types "hack" in Latin letters gets the
-    # same informative refusal as one who types "แฮก". Without it the question
-    # fell through to the generic "ไม่พบตัวบทที่เกี่ยวข้อง", which tells the user
-    # nothing about *why*.
+    # case-insensitive so that a user who types a law's name in Latin letters
+    # gets the same informative refusal as one who types it in Thai
     return re.compile("|".join(words), re.I)
 
 
-# Six groups were removed when ประมวลกฎหมายแพ่งและพาณิชย์ (1,827 มาตรา) and
-# ประมวลกฎหมายอาญา (443 มาตรา) entered the corpus: tenancy, inheritance, family,
-# loans and guarantees, substantive criminal offences, and tort. Those questions
-# now retrieve the governing section instead of a refusal.
-#
-# What remains absent is the *procedural* codes and two Acts, so the rules that
-# survive draw a line the corpus really has: the criminal code says what theft is
-# and what it is punished with, but says nothing about how to report it, how bail
-# works, or how a judgment gets enforced.
+# Ordered. The first match wins, so the rules that separate this corpus from its
+# nearest neighbours come before the ones that rule out unrelated law entirely.
 GAPS: tuple[Gap, ...] = (
-    Gap("วิธีพิจารณาคดีอาญา", "ประมวลกฎหมายวิธีพิจารณาความอาญา",
-        _p("แจ้งความ", "ลงบันทึกประจำวัน", "ประกันตัว", "ขอประกันตัว",
-           "ปล่อยชั่วคราว", "ปล่อยตัวชั่วคราว", "วางหลักประกัน", "หลักทรัพย์ประกัน",
-           "ฝากขัง", "หมายจับ", "หมายค้น", "พนักงานสอบสวน", "ชั้นสอบสวน",
-           "สั่งฟ้อง", "สั่งไม่ฟ้อง", "อัยการ", "ยื่นฟ้องคดีอาญา",
-           "ศาลจะตัดสิน", "รอลงอาญา", "โอกาสชนะคดี")),
-    Gap("วิธีพิจารณาคดีแพ่งและการบังคับคดี", "ประมวลกฎหมายวิธีพิจารณาความแพ่ง",
-        _p("บังคับคดี", "หมายบังคับคดี", "ยึดทรัพย์", "อายัดเงินเดือน",
-           "อายัดทรัพย์", "ขายทอดตลาด", "เจ้าพนักงานบังคับคดี")),
-    # The corpus holds nine tax Acts -- สรรพสามิต, ที่ดินและสิ่งปลูกสร้าง, ป้าย,
-    # การรับมรดก and more -- but not ประมวลรัษฎากร, which is where income tax, VAT
-    # and withholding actually live. That combination is the dangerous one: asked
-    # "เรื่องภาษี" the retriever returned พ.ร.บ.ภาษีการรับมรดก ม.31 and answered
-    # about a 1.5% surcharge, which is real law and almost certainly not the law
-    # the asker meant. So the rule names the code and points at the right agency.
-    Gap("ภาษีเงินได้ ภาษีมูลค่าเพิ่ม และภาษีหัก ณ ที่จ่าย", "ประมวลรัษฎากร",
-        _p("ภาษีเงินได้บุคคล", "ภาษีเงินได้นิติบุคคล", "ภาษีนิติบุคคล",
-           "ภาษีมูลค่าเพิ่ม", "vat", "แวต", "ภาษีหัก ณ ที่จ่าย", "หักภาษี ณ ที่จ่าย",
-           "ลดหย่อนภาษี", "ยื่นภาษี", "ยื่นแบบภาษี", "ภ\\.ง\\.ด", "ภพ\\.30",
-           "เสียภาษีเท่าไหร่", "เสียภาษีเท่าไร", "คำนวณภาษี", "ภาษีเงินเดือน"),
+    # The closest neighbour and the most dangerous. A teacher who breaks the
+    # rules can face two proceedings at once -- one under the Council's ethics
+    # regulations, which this corpus holds, and one under the civil-service
+    # discipline law, which it does not. The penalties differ: the Council can
+    # suspend or revoke a licence, an employer can dismiss. Answering a วินัย
+    # question out of จรรยาบรรณ text would tell a teacher the wrong thing about
+    # their job.
+    Gap("วินัยข้าราชการครู ซึ่งเป็นคนละเรื่องกับจรรยาบรรณวิชาชีพ",
+        "พระราชบัญญัติระเบียบข้าราชการครูและบุคลากรทางการศึกษา พ.ศ. 2547",
+        _p("ผิดวินัย", "วินัยร้ายแรง", "วินัยไม่ร้ายแรง", "โทษทางวินัย",
+           "วินัยข้าราชการ", "ทางวินัย", "ก\\.ค\\.ศ", "กคศ",
+           "ปลดออก", "ไล่ออก", "ให้ออกจากราชการ", "ตัดเงินเดือน", "ลดขั้นเงินเดือน"),
+        where=OBEC),
+    # Also the Council, also ksp.or.th, also a regulation -- just not one of the
+    # ten that were ingested. Being right about the agency makes this easier to
+    # answer wrongly, not harder.
+    Gap("การขอและต่ออายุใบอนุญาตประกอบวิชาชีพ",
+        "ข้อบังคับคุรุสภาว่าด้วยใบอนุญาตประกอบวิชาชีพ ซึ่งไม่ได้อยู่ในคลังนี้",
+        _p("ขอใบอนุญาต", "ขอรับใบอนุญาต", "ต่อใบอนุญาต", "ต่ออายุใบอนุญาต",
+           "ขึ้นทะเบียนใบอนุญาต", "ใบอนุญาตหมดอายุ", "ตั๋วครู",
+           "ค่าธรรมเนียม", "สมัครสอบ", "ทดสอบสมรรถนะ", "คุณสมบัติผู้ขอ"),
+        where=KSP),
+    Gap("การจ้างงาน ค่าจ้าง และสวัสดิการ",
+        "พระราชบัญญัติคุ้มครองแรงงาน พ.ศ. 2541",
+        _p("ค่าชดเชย", "เลิกจ้าง", "สัญญาจ้าง", "อัตราจ้าง", "ลูกจ้าง", "นายจ้าง",
+           "หักเงินเดือน", "ค่าจ้าง", "ค่าล่วงเวลา", "โอที", "ลาคลอด", "วันลา",
+           "ประกันสังคม", "ผู้ประกันตน"),
+        where=LABOUR),
+    Gap("ภาษี", "ประมวลรัษฎากร",
+        _p("ภาษี", "vat", "แวต", "ลดหย่อน", "ยื่นแบบ", "ภ\\.ง\\.ด"),
         where=REVENUE),
-    # The widest of the rules, and the one adversarial testing forced open. The
-    # corpus has พ.ร.บ.คุ้มครองแรงงาน, which sits close to every social-security
-    # concept in embedding space, so "ถูกเลิกจ้างได้เงินทดแทนกรณีว่างงานเดือนละ
-    # เท่าไหร่" retrieved confident labour-law text, cleared the gate, cited real
-    # sections -- and the model filled the gap with a benefit figure that exists
-    # in no Thai law. Every defence passed while the answer was invented, so the
-    # vocabulary here has to cover how people describe the benefits, not just the
-    # name of the fund.
-    Gap("ประกันสังคม", "พระราชบัญญัติประกันสังคม พ.ศ. 2533",
-        _p("ประกันสังคม", "ผู้ประกันตน", "สปส", "มาตรา 33", "มาตรา 39", "มาตรา 40",
-           "เงินสมทบ", "ส่งสมทบ", "ว่างงาน", "เงินชราภาพ", "บำนาญชราภาพ",
-           "สงเคราะห์บุตร", "ทุพพลภาพ", "เงินทดแทนกรณี", "กองทุนประกันสังคม"),
-        where=SOCIAL_SECURITY),
-    # พ.ร.บ.ว่าด้วยความผิดอันเกิดจากการใช้เช็ค พ.ศ. 2534 is not in the source
-    # dataset. Without it the retriever falls back to ป.พ.พ. ลักษณะเช็ค, which is
-    # civil, and the bot told a tester that a bounced cheque "ฟ้องอาญาไม่ได้" --
-    # advice that could cost someone a criminal claim.
-    Gap("ความผิดจากการใช้เช็ค", "พระราชบัญญัติว่าด้วยความผิดอันเกิดจากการใช้เช็ค พ.ศ. 2534",
-        _p("เช็คเด้ง", "เช็คคืน", "เงินในบัญชีไม่พอ", "สั่งจ่ายเช็ค", "ธนาคารปฏิเสธการจ่ายเงิน")),
+    Gap("ความผิดอาญาและโทษทางอาญา", "ประมวลกฎหมายอาญา",
+        _p("ลักทรัพย์", "ฉ้อโกง", "ยักยอก", "หมิ่นประมาท", "ทำร้ายร่างกาย",
+           "จำคุก", "ติดคุก", "ปรับกี่บาท", "แจ้งความ", "ประกันตัว", "คดีอาญา"),
+        hard=False),
+    Gap("ครอบครัว มรดก สัญญา และหนี้", "ประมวลกฎหมายแพ่งและพาณิชย์",
+        _p("หย่า", "สมรส", "มรดก", "พินัยกรรม", "สัญญาเช่า", "กู้ยืม", "ค้ำประกัน",
+           "ทวงหนี้", "ดอกเบี้ย"), hard=False),
+    Gap("วิธีพิจารณาความและการบังคับคดี",
+        "ประมวลกฎหมายวิธีพิจารณาความแพ่งและความอาญา",
+        _p("บังคับคดี", "ยึดทรัพย์", "อายัดเงินเดือน", "ฟ้องศาล", "ขึ้นศาล",
+           "พนักงานสอบสวน", "อัยการ", "รอลงอาญา"), hard=False),
+    # Named instruments that are not in the corpus at all. A question that names
+    # a law by name is the one the model is most tempted to answer from memory.
+    Gap("กฎหมายฉบับที่คลังนี้ไม่มี", "ตัวบทฉบับนั้น",
+        _p(r"พ\.?ร\.?บ\.?คอมพิวเตอร์", "พระราชบัญญัติว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์",
+           r"พ\.?ร\.?บ\.?คุ้มครองข้อมูล", "pdpa", "ประมวลกฎหมายที่ดิน",
+           "พระราชบัญญัติการศึกษาแห่งชาติ", r"พ\.?ร\.?บ\.?การศึกษาแห่งชาติ")),
+    # Not a legal question at all. These score low and the cosine gate would
+    # usually catch them, but a request phrased in school vocabulary sits close
+    # enough to the corpus to clear it.
+    Gap("การจัดการเรียนการสอน ซึ่งไม่ใช่คำถามกฎหมาย",
+        "หลักสูตรและแนวปฏิบัติของต้นสังกัด",
+        _p("แผนการสอน", "แผนการจัดการเรียนรู้", "ใบงาน", "ข้อสอบ", "สื่อการสอน",
+           "เขียนวิจัยในชั้นเรียน", "วิทยฐานะ", "ว\\s*ฐ", "เลื่อนวิทยฐานะ"),
+        where=OBEC),
 )
 
 
 def find_gap(question: str) -> Gap | None:
     """Return the first known gap this question falls into, if any."""
+    ethics = bool(ETHICS.search(question))
     for gap in GAPS:
+        if not gap.hard and ethics:
+            continue
         if gap.pattern.search(question):
             return gap
     return None
 
 
 # Subject matter that exists only in law this corpus does not hold. Matching the
-# *question* is not enough: a question can be phrased entirely in labour-law
-# words and still be answered with social-security content, because the model
-# knows the topic and the retrieved sections look close enough to write from.
-# Two leaks found in testing did exactly that -- one invented an unemployment
-# benefit of 1,000 baht a month and attached it to พ.ร.บ.คุ้มครองแรงงาน, the
-# other explained where to claim maternity money from the social security fund.
-# Neither cited a law it had not been given, so app/verify.py had nothing to
-# catch. This reads the finished answer instead.
+# *question* is not enough: a question can be phrased entirely in ethics words
+# and still be answered with civil-service content, because the model knows the
+# topic and the retrieved sections look close enough to write from. This reads
+# the finished answer instead.
 BEYOND_CORPUS = (
-    (re.compile("ประกันสังคม|ผู้ประกันตน|กองทุนประกันสังคม|เงินสมทบ"),
-     "ประกันสังคม", "พระราชบัญญัติประกันสังคม พ.ศ. 2533", SOCIAL_SECURITY),
-    (re.compile("ประมวลรัษฎากร|ภาษีเงินได้บุคคล|ภาษีเงินได้นิติบุคคล|"
-                "ภาษีมูลค่าเพิ่ม|หักภาษี ณ ที่จ่าย|ภาษีหัก ณ ที่จ่าย"),
-     "ภาษีตามประมวลรัษฎากร", "ประมวลรัษฎากร", REVENUE),
-    (re.compile(r"ประมวลกฎหมายวิธีพิจารณา|ป\.วิ\.อาญา|ป\.วิ\.แพ่ง"),
-     "วิธีพิจารณาความ", "ประมวลกฎหมายวิธีพิจารณาความ", LAWYER),
+    (re.compile("ระเบียบข้าราชการครู|วินัยข้าราชการ|ก\\.ค\\.ศ|ปลดออก|ไล่ออกจากราชการ"),
+     "วินัยข้าราชการครู", "พระราชบัญญัติระเบียบข้าราชการครูและบุคลากรทางการศึกษา", OBEC),
+    # The citation form only. ข้อ 7 ของข้อบังคับฯ 2568 really does say that an
+    # investigating subcommittee is a public official "ตามประมวลกฎหมายอาญา", so
+    # naming the code in passing is quoting the corpus, not leaving it. Naming a
+    # section of it is not.
+    (re.compile(r"ประมวลกฎหมาย(?:อาญา|แพ่ง[ก-๙]*|วิธีพิจารณา[ก-๙]*)\s*(?:มาตรา|ม\.)\s*[๐-๙0-9]"),
+     "ประมวลกฎหมาย", "ประมวลกฎหมายฉบับนั้น", LAWYER),
+    (re.compile("คุ้มครองแรงงาน|ประกันสังคม"),
+     "กฎหมายแรงงานและประกันสังคม", "พระราชบัญญัติคุ้มครองแรงงานและกฎหมายประกันสังคม",
+     LABOUR),
+    (re.compile("ประมวลรัษฎากร|ภาษีเงินได้"),
+     "ภาษี", "ประมวลรัษฎากร", REVENUE),
 )
 
 

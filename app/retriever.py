@@ -32,7 +32,15 @@ from app.embed import get_embedder
 from app.query_expand import expand
 from app.thai_tokenize import word_tokenize
 
-SECTION_Q_RE = re.compile(r"มาตรา\s*(\d+(?:/\d+)?)")
+# Council regulations number their rules as ข้อ and only the Act uses มาตรา, so a
+# question naming either one is naming a section. Both are matched regardless of
+# which document the asker had in mind -- people write "ข้อ 7" for a มาตรา and
+# the other way round, and the boost is a hint about *which number*, not about
+# which kind of instrument.
+SECTION_Q_RE = re.compile(r"(?:มาตรา|ข้อ)\s*(\d+(?:/\d+)?)")
+# how much of its fused score a repealed rule keeps. Chosen to lose a close
+# contest and win a lopsided one, not to hide the text.
+SUPERSEDED_PENALTY = 0.6
 THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
 
@@ -47,7 +55,26 @@ class Hit:
 
     @property
     def citation(self) -> str:
-        return f"{self.rec['act']} มาตรา {self.rec['section']}"
+        """How this piece of text is referred to.
+
+        Two things come from the record rather than from a format string.
+
+        The unit word, because the corpus holds two kinds of instrument.
+        ข้อบังคับคุรุสภา numbers its rules as ข้อ and พระราชบัญญัติ numbers its as
+        มาตรา; writing "ข้อบังคับคุรุสภา ... มาตรา 7" is simply wrong, and it is
+        the form a reader would take to the Council to argue their case.
+
+        The name, because the full titles run to eighty characters and the model
+        shortens them itself if it is not given a short form. It shortened
+        ข้อบังคับฯ แบบแผนพฤติกรรม 2550 to "ข้อบังคับฯ จรรยาบรรณ 2550", which is
+        the title of a different regulation, and the citation guard then threw
+        away an otherwise correct answer.
+        """
+        name = self.rec.get("short") or self.rec["act"]
+        cite = f"{name} {self.rec.get('unit', 'มาตรา')} {self.rec['section']}"
+        if self.rec.get("superseded_by"):
+            cite += " (ยกเลิกแล้ว)"
+        return cite
 
 
 @dataclass
@@ -177,6 +204,16 @@ class Retriever:
                     fused[idx] += 0.5 if self.corpus[idx].get("part", 0) == 0 else 0.4
                     exact = True
 
+        # A repealed regulation still answers the question it used to govern, and
+        # embeds almost identically to the text that replaced it -- "อุทธรณ์ได้
+        # ภายในกี่วัน" put ข้อบังคับฯ 2553 ข้อ 60 first, three years after ข้อ 3
+        # ของข้อบังคับฯ 2568 repealed it. The penalty is a nudge rather than a
+        # filter: the older text is still worth retrieving when a proceeding was
+        # begun under it, so it should lose a tie, not disappear.
+        for idx in list(fused):
+            if self.corpus[idx].get("superseded_by"):
+                fused[idx] *= SUPERSEDED_PENALTY
+
         d_rank = {int(idx): r for r, idx in enumerate(dense)}
         b_rank = {int(idx): r for r, idx in enumerate(sparse)}
         # RRF's known failure: a chunk ranked #1 by one retriever but outside the
@@ -187,7 +224,9 @@ class Retriever:
         # retriever's best few results keep a seat regardless of the fused score.
         selected: list[int] = []
         for idx in [int(i) for i in dense[:settings.guarantee_top]]:
-            if idx not in selected:
+            # the reserved seats exist to protect the best *usable* hit; handing
+            # one to a repealed rule would undo the penalty applied above
+            if idx not in selected and not self.corpus[idx].get("superseded_by"):
                 selected.append(idx)
         for idx in sorted(fused, key=lambda i: -fused[i]):
             if len(selected) >= top_k:

@@ -1,24 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Turn a citizen's question into a cited answer, or into an honest refusal.
+"""Turn a teacher's question into a cited answer, or into an honest refusal.
 
-The refusal path matters more than the answer path. The corpus stops around 2563
-and still lacks ป.วิ.แพ่ง, ป.วิ.อาญา, ประมวลรัษฎากร and พ.ร.บ.ประกันสังคม, so a
-large share of real questions genuinely cannot be answered from it. Guessing at
-those is the failure mode that hurts users.
+The refusal path matters more than the answer path, and more here than it did
+before. This corpus is ten documents of the Teachers Council -- the professional
+ethics of educators and the procedure for judging breaches of them -- and
+nothing else in Thai law. A teacher asking about dismissal, about pay, about
+their licence application, or about civil-service discipline is asking a real
+question that this system cannot answer, and the ones that sit closest to the
+corpus are the ones most likely to be answered wrongly.
 
-Four guards, catching four different failures:
+Five guards, catching five different failures:
 
   1. find_gap -- the question is about law the corpus does not hold. These score
-     *high*, because the retriever finds a real act on the same subject; only a
-     rule that knows what is missing can catch them.
+     *high*, because the retriever finds real, on-topic text; only a rule that
+     knows what is missing can catch them. "ข้าราชการครูทำผิดวินัยร้ายแรงมีโทษ
+     อะไร" reaches cosine 0.655 against ethics regulations that say nothing
+     about civil-service discipline.
   2. the cosine gate -- nothing in the corpus resembles the question at all.
   3. find_gap_in_answer -- the *answer* wandered into missing law even though the
-     question did not name it. Adversarial testing produced an answer that cited
-     พ.ร.บ.คุ้มครองแรงงาน correctly and then invented an unemployment benefit of
-     1,000 baht a month; guards 1, 2 and 4 all passed it.
-  4. unsupported_laws -- the answer names an act that was never supplied.
+     question did not name it.
+  4. unsupported_laws -- the answer names an instrument that was never supplied.
+  5. unsupported_sections -- the answer cites a rule number that is not in the
+     evidence, or attaches the wrong unit word to it. A wrong name is visible to
+     the reader; "ตามข้อ 23" when the rule is ข้อ 13 is not.
 
-None of them spends an LLM call except the last two, which read what the model
+None of them spends an LLM call except the last three, which read what the model
 already wrote. The model is never asked whether it should have answered.
 """
 from __future__ import annotations
@@ -35,46 +41,70 @@ from app.llm import LLMUnavailable, complete
 from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
-from app.verify import unsupported_laws
+from app.verify import unsupported_laws, unsupported_sections
 
 log = logging.getLogger(__name__)
 
-DISCLAIMER = ("ℹ️ ข้อมูลเบื้องต้นจากตัวบทกฎหมาย ไม่ใช่คำปรึกษาทางกฎหมาย "
-              f"และอ้างจากคลังข้อมูลที่ปรับปรุงถึงประมาณ {settings.corpus_as_of} "
-              "ก่อนดำเนินการใด ๆ ควรตรวจสอบฉบับปัจจุบันหรือปรึกษาทนายความ")
+DISCLAIMER = ("ℹ️ ข้อมูลเบื้องต้นจากข้อบังคับคุรุสภาและพระราชบัญญัติสภาครูฯ "
+              "ไม่ใช่คำวินิจฉัยของคุรุสภาและไม่ใช่คำปรึกษาทางกฎหมาย "
+              f"อ้างจากตัวบทที่ประกาศถึง {settings.corpus_as_of} "
+              "ก่อนดำเนินการใด ๆ ควรตรวจสอบฉบับปัจจุบันที่ ksp.or.th/laws")
+
+SCOPE = ("คลังนี้มีเฉพาะจรรยาบรรณวิชาชีพทางการศึกษา ได้แก่ ข้อบังคับคุรุสภา "
+         "ว่าด้วยจรรยาบรรณของวิชาชีพ แบบแผนพฤติกรรมตามจรรยาบรรณ "
+         "การพิจารณาการประพฤติผิดจรรยาบรรณ การอุทธรณ์คำวินิจฉัย "
+         "และพระราชบัญญัติสภาครูและบุคลากรทางการศึกษา")
 
 OUT_OF_SCOPE = (
     "ยังตอบคำถามนี้ไม่ได้ครับ เพราะไม่พบตัวบทที่เกี่ยวข้องในคลังข้อมูล\n\n"
-    "คลังนี้มีพระราชบัญญัติและพระราชกำหนด พร้อมประมวลกฎหมายแพ่งและพาณิชย์ "
-    "และประมวลกฎหมายอาญา แต่ยังไม่มีประมวลกฎหมายวิธีพิจารณาความ "
-    "คำถามเรื่องขั้นตอนทางคดีจึงยังตอบไม่ได้\n\n"
-    "ลองถามใหม่ด้วยคำที่ตรงกับเนื้อหากฎหมาย เช่น เรื่องเลิกจ้าง ค่าชดเชย วันลา "
-    "การทวงหนี้ ข้อมูลส่วนบุคคล สัญญาเช่า มรดก หรือความผิดอาญา"
+    f"{SCOPE}\n\n"
+    "ลองถามใหม่ให้ตรงกับเรื่องเหล่านี้ เช่น จรรยาบรรณห้าด้านของครู "
+    "พฤติกรรมที่พึงประสงค์และไม่พึงประสงค์ โทษทางจรรยาบรรณ "
+    "การร้องเรียน การสอบสวน หรือการอุทธรณ์"
 )
 
 FABRICATED = (
     "ยังตอบคำถามนี้ไม่ได้ครับ\n\n"
     "ระบบร่างคำตอบโดยอ้างถึง {laws} ซึ่งไม่มีอยู่ในคลังข้อมูล จึงตรวจสอบความถูกต้อง"
     "ไม่ได้ ผมเลยไม่ส่งคำตอบนั้นให้ เพราะข้อมูลกฎหมายที่ผิดอันตรายกว่าการไม่ตอบ\n\n"
-    "แนะนำให้ดูตัวบทที่ krisdika.go.th หรือปรึกษาทนายความ "
-    "สภาทนายความมีสายด่วน 1167 ให้คำปรึกษาเบื้องต้นฟรีครับ"
+    "แนะนำให้ดูตัวบทฉบับเต็มที่ ksp.or.th/laws หรือติดต่อคุรุสภาโดยตรงครับ"
 )
 
-SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อมูลกฎหมายไทยสำหรับประชาชนทั่วไป ตอบผ่านแอปแชท LINE
+MISCITED = (
+    "ยังตอบคำถามนี้ไม่ได้ครับ\n\n"
+    "ระบบร่างคำตอบโดยอ้างถึง {sections} ซึ่งไม่ตรงกับตัวบทที่ค้นเจอ "
+    "ผมเลยไม่ส่งคำตอบนั้นให้ เพราะเลขข้อที่ผิดจะพาไปอ่านกฎคนละข้อ\n\n"
+    "ลองถามใหม่ให้เจาะจงขึ้น หรือดูตัวบทฉบับเต็มที่ ksp.or.th/laws ครับ"
+)
+
+SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อมูลเรื่องจรรยาบรรณวิชาชีพทางการศึกษา สำหรับครูและผู้ปกครอง ตอบผ่านแอปแชท LINE
+
+ขอบเขต
+คลังข้อมูลมีเฉพาะข้อบังคับคุรุสภาและพระราชบัญญัติสภาครูและบุคลากรทางการศึกษา พ.ศ. 2546
+ไม่มีกฎหมายแรงงาน อาญา แพ่ง ภาษี และไม่มีวินัยข้าราชการครูตาม พ.ร.บ.ระเบียบข้าราชการครูฯ
+จรรยาบรรณวิชาชีพกับวินัยข้าราชการเป็นคนละเรื่องกัน ห้ามตอบปนกัน
 
 เนื้อหา
 1. ตอบจากตัวบทที่ให้มาเท่านั้น ห้ามใช้ความรู้อื่น
-2. ทุกข้อความที่เป็นสาระทางกฎหมาย ต้องอ้างมาตราในวงเล็บโค้ง เช่น (พ.ร.บ.คุ้มครองแรงงาน 2541 ม.118) ใช้ชื่อย่อแบบนี้ ไม่ต้องเขียนชื่อเต็ม
-   ถ้าเป็นประมวลกฎหมาย ให้เขียนว่า (ป.พ.พ. ม.1599) หรือ (ป.อาญา ม.335) ห้ามเรียกประมวลกฎหมายว่า พ.ร.บ.
-3. ถ้าตัวบทไม่พอจะตอบ บอกตรง ๆ ว่าข้อมูลไม่พอ ห้ามเดา ห้ามแต่งเลขมาตรา
-4. อธิบายด้วยภาษาที่คนทั่วไปเข้าใจ ห้ามคัดลอกตัวบทมาทั้งดุ้น
-5. ถ้ามีตัวเลขสำคัญ เช่น จำนวนวัน จำนวนเงิน ให้ระบุเป็นเลขอารบิก
+2. ทุกข้อความที่เป็นสาระ ต้องอ้างที่มาในวงเล็บ โดยคัดลอกชื่อที่กำกับหน้าตัวบทแต่ละชิ้นมาทั้งบรรทัด
+   เช่น (ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 7) หรือ (พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546 มาตรา 54)
+   ห้ามย่อชื่อเอง ห้ามสลับชื่อข้ามฉบับ และห้ามเปลี่ยนคำว่า "ข้อ" เป็น "มาตรา" หรือกลับกัน
+   ข้อบังคับคุรุสภาใช้คำว่า "ข้อ" พระราชบัญญัติใช้คำว่า "มาตรา" ข้อบังคับไม่มีมาตรา
+3. ห้ามแต่งเลขข้อหรือเลขมาตรา ถ้าไม่แน่ใจเลขข้อ ให้อธิบายโดยไม่ใส่เลข
+4. ถ้าตัวบทไหนมีคำว่า (ยกเลิกแล้ว) กำกับอยู่ ห้ามอ้างเป็นกฎที่ใช้อยู่
+   ให้ใช้ฉบับที่ไม่ได้ถูกยกเลิก และบอกผู้ใช้ได้ว่าฉบับเก่าถูกยกเลิกไปแล้ว
+5. ถ้าตัวบทไม่พอจะตอบ บอกตรง ๆ ว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้ ห้ามเดา
+   โดยเฉพาะคำถามที่ถามหาตัวเลข เช่น จำนวนชั่วโมงอบรม ถ้าตัวบทไม่ได้กำหนดไว้ ให้บอกว่าไม่ได้กำหนด
+6. ถ้าถูกขอให้ช่วยหลบเลี่ยงการถูกร้องเรียนหรือการสอบสวน ให้ปฏิเสธ
+   แล้วอธิบายกระบวนการและสิทธิชี้แจงตามตัวบทแทน
+7. อธิบายด้วยภาษาที่คนทั่วไปเข้าใจ ห้ามคัดลอกตัวบทมาทั้งดุ้น
+8. ถ้ามีตัวเลขสำคัญ เช่น จำนวนวัน จำนวนคน ให้ระบุเป็นเลขอารบิก
 
 รูปแบบสำหรับหน้าจอแชท
 - ย่อหน้าแรกคือคำตอบตรง ๆ 1-2 ประโยค ต้องอ่านจบแล้วได้คำตอบทันที
-- เว้นบรรทัดว่าง แล้วอธิบายเหตุผลสั้น ๆ พร้อมอ้างมาตรา
+- เว้นบรรทัดว่าง แล้วอธิบายเหตุผลสั้น ๆ พร้อมอ้างข้อหรือมาตรา
 - ถ้ามีขั้นตอนที่ทำต่อได้ ให้ขึ้นบรรทัดใหม่แต่ละข้อ นำหน้าด้วย 1. 2. 3.
-- ถ้ามีเงื่อนไขหลายกรณี เช่น อายุงานต่างกันได้เงินต่างกัน ให้ขึ้นบรรทัดใหม่แต่ละกรณี นำหน้าด้วย •
+- ถ้ามีหลายกรณี ให้ขึ้นบรรทัดใหม่แต่ละกรณี นำหน้าด้วย •
 - ความยาวรวมไม่เกิน 12 บรรทัด
 
 ข้อห้ามเรื่องรูปแบบ เพราะ LINE แสดงข้อความธรรมดาเท่านั้น
@@ -85,7 +115,7 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
 - ห้ามพูดถึงตัวระบบ เช่น ข้อความถูกตัดทอน หรือ ข้อจำกัดของ LINE ผู้ใช้ไม่ต้องรู้เรื่องนี้
 
 ข้อห้ามที่สำคัญที่สุด
-ห้ามอ้างชื่อกฎหมายที่ไม่ได้อยู่ในตัวบทที่ให้มาเด็ดขาด แม้จะมั่นใจว่าจำได้ก็ตาม
+ห้ามอ้างชื่อกฎหมายหรือข้อบังคับที่ไม่ได้อยู่ในตัวบทที่ให้มาเด็ดขาด แม้จะมั่นใจว่าจำได้ก็ตาม
 ถ้าตัวบทที่ให้มาไม่ตรงกับคำถามเลย ให้ตอบเพียงว่าไม่มีข้อมูลพอ ห้ามตอบจากความรู้เดิม"""
 
 
@@ -190,11 +220,12 @@ async def answer_question(question: str) -> Answer:
                  result.max_dense, result.max_bm25, question[:80])
         text = await compose_refusal(
             question,
-            topic="เรื่องที่คลังข้อมูลนี้ไม่มีตัวบทครอบคลุม",
-            code="กฎหมายที่ยังไม่ได้เก็บเข้าคลัง",
-            where=("ลองถามใหม่ด้วยคำที่ตรงกับเนื้อหากฎหมายมากขึ้น เช่น เรื่องเลิกจ้าง "
-                   "ค่าชดเชย วันลา การทวงหนี้ ข้อมูลส่วนบุคคล สัญญาเช่า มรดก "
-                   "ความผิดอาญา หรือเรื่องคอมพิวเตอร์ หรือดูตัวบทเองที่ krisdika.go.th"),
+            topic="เรื่องที่อยู่นอกจรรยาบรรณวิชาชีพทางการศึกษา",
+            code="กฎหมายฉบับอื่นที่ไม่ได้อยู่ในคลังนี้",
+            where=("ลองถามใหม่ให้ตรงกับจรรยาบรรณวิชาชีพทางการศึกษา เช่น "
+                   "จรรยาบรรณห้าด้าน พฤติกรรมที่พึงประสงค์และไม่พึงประสงค์ "
+                   "โทษทางจรรยาบรรณ การร้องเรียน การสอบสวน หรือการอุทธรณ์ "
+                   "หรือดูตัวบทเองที่ ksp.or.th/laws"),
             fallback=OUT_OF_SCOPE)
         return Answer(text=text, hits=hits, in_scope=False)
 
@@ -232,5 +263,14 @@ async def answer_question(question: str) -> Answer:
         log.warning("HALLUCINATION blocked %s | %r", invented, question[:80])
         return Answer(text=FABRICATED.format(laws=", ".join(invented[:2])),
                       hits=hits, in_scope=False, error="unsupported citations")
+
+    # the number matters as much as the name. An answer can cite the right
+    # regulation and the wrong rule inside it, which reads as correct and sends
+    # the reader to text that does not say what they were told it says.
+    miscited = unsupported_sections(text, citations, [h.rec["text"] for h in hits])
+    if miscited:
+        log.warning("MISCITED %s | %r", miscited, question[:80])
+        return Answer(text=MISCITED.format(sections=", ".join(miscited[:3])),
+                      hits=hits, in_scope=False, error="unsupported sections")
 
     return Answer(text=tidy_for_chat(text), citations=citations, hits=hits)

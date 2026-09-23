@@ -117,12 +117,22 @@ class Settings(BaseSettings):
     rerank_timeout: float = 15.0
 
     # --- answer policy ---
-    corpus_as_of: str = "พ.ศ. 2563"
+    corpus_as_of: str = "8 เมษายน พ.ศ. 2569"
     max_answer_chars: int = 1800
+
+    # Which corpus the index is built from and served against. The general-law
+    # corpus is still in the repo and still works -- point this at it and rebuild
+    # to get the old bot back:
+    #
+    #   CORPUS_FILE=corpus.jsonl python -m ingest.build_index
+    #
+    # but the thresholds and the coverage rules in app/coverage.py are tuned for
+    # the file named here, so the two are a pair.
+    corpus_file: str = "corpus_ksp.jsonl"
 
     @property
     def corpus_path(self) -> str:
-        return os.path.join(PROCESSED_DIR, "corpus.jsonl")
+        return os.path.join(PROCESSED_DIR, self.corpus_file)
 
     @property
     def vectors_path(self) -> str:

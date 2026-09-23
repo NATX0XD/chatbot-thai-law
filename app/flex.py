@@ -17,6 +17,8 @@ text inside a text block. Everything here stays well inside those.
 """
 from __future__ import annotations
 
+import re
+
 from app.config import settings
 
 INK = "#1B2430"
@@ -33,9 +35,27 @@ def _text(text: str, **kw) -> dict:
     return node
 
 
+CITATION_SPLIT = re.compile(r"\s+(ข้อ|มาตรา)\s+(?=[\d๐-๙])")
+
+
+def _split_citation(citation: str) -> tuple[str, str]:
+    """Separate the instrument's name from the rule number it points at.
+
+    Split on whichever unit word the citation uses. Regulations of the Teachers
+    Council number their rules as ข้อ and only the Act uses มาตรา, so hard-coding
+    one of them left the other's number glued to the title and printed nothing in
+    the reference line.
+    """
+    parts = CITATION_SPLIT.split(citation)
+    if len(parts) == 3:
+        act, unit, number = parts
+        return act, f"{unit} {number}"
+    return citation, ""
+
+
 def _citation_row(citation: str) -> dict:
     """One statute reference, marked with a gold rule so it reads as evidence."""
-    act, _, section = citation.rpartition(" มาตรา ")
+    act, section = _split_citation(citation)
     return {
         "type": "box", "layout": "horizontal", "spacing": "sm",
         "paddingAll": "8px", "backgroundColor": "#F7F8FA", "cornerRadius": "6px",
@@ -44,7 +64,7 @@ def _citation_row(citation: str) -> dict:
              "backgroundColor": GOLD, "cornerRadius": "2px", "contents": []},
             {"type": "box", "layout": "vertical", "flex": 1, "contents": [
                 _text(act or citation, size="xs", color=INK, weight="bold"),
-                _text(f"มาตรา {section}" if section else " ", size="xxs", color=MUTED),
+                _text(section or " ", size="xxs", color=MUTED),
             ]},
         ],
     }
@@ -64,7 +84,7 @@ def answer_bubble(answer_text: str, citations: list[str], *,
         body += [{"type": "box", "layout": "vertical", "margin": "sm", "spacing": "xs",
                   "contents": [_citation_row(c) for c in citations[:3]]}]
         if len(citations) > 3:
-            body.append(_text(f"และอีก {len(citations) - 3} มาตรา",
+            body.append(_text(f"และอีก {len(citations) - 3} รายการ",
                               size="xxs", color=MUTED, margin="sm"))
 
     return {
