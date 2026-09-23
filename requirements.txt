@@ -16,6 +16,12 @@ pythainlp==5.0.5
 # ingest
 pandas==2.2.3
 pyarrow==18.1.0
+pymupdf==1.28.2
+
+# ingest, macOS only: three of the Teachers Council PDFs have no usable text
+# layer and are read with the Vision framework. Skip this on Linux and rely on
+# the cached text in data/ocr/ instead -- see ingest/thai_pdf_text.py.
+pyobjc-framework-Vision==12.2.2 ; sys_platform == "darwin"
 
 # dev
 pytest==8.3.4
