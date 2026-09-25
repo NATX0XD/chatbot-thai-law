@@ -642,10 +642,14 @@ async def answer_question(question: str) -> Answer:
         log.info("TYPED NUMBERS %s | %r", typed[:3], question[:70])
 
     faults = inspect(text, hits)
+    # Recorded, not acted on. The number has already been kept or removed by
+    # the substitution, so there is nothing left for a rewrite to fix -- and
+    # counting these as faults diluted the test that decides whether a rewrite
+    # is an improvement: 19 of the 33 faults on rejected repairs were these.
     for number in dict.fromkeys(typed):
         faults.append(Fault(
             f"คำตอบพิมพ์ “{number}” เอง ให้ใช้เลขในวงเล็บเหลี่ยมของตัวบทแทน",
-            blocks=False, kind="typed citation"))
+            blocks=False, kind="typed citation", acts=False))
     found = [f.note for f in faults]
     repair = "not attempted"
     if any(f.acts for f in faults):
@@ -657,7 +661,14 @@ async def answer_question(question: str) -> Answer:
         except LLMUnavailable:
             second = ""
         if second and not looks_degenerate(second):
+            # the rewrite goes through the same substitution as the first draft.
+            # It did not, and accepted repairs shipped with their pointers
+            # unresolved -- "…ต่อจิตใจและอารมณ์ 2(ข)(๓)" reached a reader as a
+            # rule number, in an answer the system had recorded as repaired.
+            second, second_typed = resolve_citations(second, hits)
             left = inspect(second, hits)
+            left += [Fault(note, blocks=False, kind="typed citation", acts=False)
+                     for note in second_typed]
             # A repair has to earn its shorter fault list. Deleting the flagged
             # citation shortens it too, and round seven caught three answers
             # doing exactly that -- a provision cited correctly the round before,

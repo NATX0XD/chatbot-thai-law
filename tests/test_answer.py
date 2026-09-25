@@ -461,3 +461,26 @@ def test_a_refusal_names_the_law_and_does_not_recite_the_note(monkeypatch):
     assert a.error == "unsupported citations"
     assert a.text.count("ซึ่งไม่มีอยู่ในคลังข้อมูล") == 1
     assert "คำตอบอ้าง" not in a.text
+
+
+def test_a_repaired_answer_goes_through_the_same_substitution(monkeypatch):
+    """The rewrite was shipped raw.
+
+    Pointers in the first draft became citations; pointers in the second did
+    not, so an accepted repair could reach a reader as "…ต่อจิตใจและอารมณ์
+    2(ข)(๓)" -- a rule number the system had never checked, in an answer it had
+    recorded as repaired.
+    """
+    drafts = iter([
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ (ข้อบังคับคุรุสภา แบบแผนพฤติกรรม"
+        "ตามจรรยาบรรณ 2550 ข้อ 99)",
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ [1](ข)(๓)",
+    ])
+
+    async def fake_complete(system, user):
+        return next(drafts)
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert "[1]" not in a.text
+    assert a.repair == "accepted"
