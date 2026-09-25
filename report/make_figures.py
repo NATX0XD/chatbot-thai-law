@@ -105,6 +105,7 @@ HEIGHTS = {
     "fig-3-13-guards": 640,
     "fig-3-14-evalloop": 620,
     "fig-4-1-trajectory": 500,
+    "fig-4-2-outcome": 360,
 }
 
 # ---------------------------------------------------------------- 2-1 ladder
@@ -688,6 +689,32 @@ FIGURES["fig-4-1-trajectory"] = """
     <span style="color:#2f7d4f">&mdash;&mdash; เกณฑ์ผ่าน 45 เคส</span>
   </div>
   <div class="lbl">แต่ละรอบประเมินครบ 61 เคสโดยผู้ประเมินที่ไม่ใช่ผู้พัฒนา &mdash; เส้นเกณฑ์กำหนดไว้ก่อนการประเมินรอบแรกและไม่ถูกลดลงเมื่อไม่ผ่าน</div>
+</div>
+"""
+
+
+FIGURES["fig-4-2-outcome"] = """
+<div class="col" style="width:1080px">
+  <div class="row" style="gap:0">
+    <div style="width:210px"></div>
+    <div class="grow center" style="font-size:16px;font-weight:600;padding-bottom:10px">ตอบถูกต้อง</div>
+    <div class="grow center" style="font-size:16px;font-weight:600;padding-bottom:10px">ตอบไม่ถูกต้อง</div>
+    <div style="width:150px" class="center" style="font-size:15px"></div>
+  </div>
+  <div class="row" style="gap:12px">
+    <div style="width:210px;display:flex;align-items:center;font-size:16px;font-weight:600">ถามด้วยคำตรงตัวบท</div>
+    <div class="box ok grow center" style="padding:22px"><b style="font-size:30px">62</b><span>รหัส 1 &middot; 34.44%</span></div>
+    <div class="box warn grow center" style="padding:22px"><b style="font-size:30px">28</b><span>รหัส 0 &middot; 15.56%</span></div>
+    <div style="width:150px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8d2230;font-weight:600">68.89%</div>
+  </div>
+  <div class="row" style="gap:12px">
+    <div style="width:210px;display:flex;align-items:center;font-size:16px;font-weight:600">ถามด้วยภาษาพูด</div>
+    <div class="box ok grow center" style="padding:22px"><b style="font-size:30px">70</b><span>รหัส 2 &middot; 38.89%</span></div>
+    <div class="box warn grow center" style="padding:22px"><b style="font-size:30px">20</b><span>รหัส 3 &middot; 11.11%</span></div>
+    <div style="width:150px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8d2230;font-weight:600">77.78%</div>
+  </div>
+  <div class="lbl">การทดสอบ 180 ครั้ง (60 คำถาม &times; ผู้ประเมิน 3 คน) &mdash; ค่าความถูกต้องโดยรวม 73.33%
+  คำถามที่ใช้ภาษาพูดตอบถูกมากกว่าคำถามที่ใช้คำตรงตัวบท เพราะคำถามแบบหลังมักถามหาเลขข้อหรือจำนวน ซึ่งเป็นจุดที่ระบบพลาด</div>
 </div>
 """
 

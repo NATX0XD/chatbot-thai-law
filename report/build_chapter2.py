@@ -37,6 +37,7 @@ from docx.shared import Inches, Pt, RGBColor
 from report.chapter2_content import CHAPTER, REFERENCES
 from report.chapter3_content import CHAPTER as CHAPTER3
 from report.chapter4_content import CHAPTER as CHAPTER4
+from report.glossary_content import GLOSSARY
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIGURES = os.path.join(HERE, "figures")
@@ -272,6 +273,11 @@ def write_docx() -> None:
     doc = docx.Document(TARGET)
     template = body_style(doc)
 
+    # นิยามศัพท์เฉพาะ goes at the end of บทที่ 1, and is added rather than
+    # replaced -- chapter 1 is the author's own and is not touched otherwise
+    if not any("นิยามศัพท์เฉพาะ" in p.text for p in doc.paragraphs):
+        append_to_chapter(doc, template, "บทนำ", GLOSSARY)
+
     # last chapter first: replacing one shifts every paragraph index after it
     if not any(p.style.name == "Heading 1" and "ผลการดำเนินงานวิจัย" in p.text
                for p in doc.paragraphs):
@@ -285,12 +291,23 @@ def write_docx() -> None:
     print("wrote", TARGET)
 
 
+def append_to_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
+    """Add blocks to the end of a chapter without disturbing what is there."""
+    heading, body = chapter_span(doc, title)
+    anchor = body[-1]._element if body else heading._element
+    _emit(doc, template, Cursor(doc, anchor), blocks)
+    print(f"  {title}: appended {len(blocks)} blocks")
+
+
 def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
     heading, old = chapter_span(doc, title)
     for para in old:
         para._element.getparent().remove(para._element)
+    _emit(doc, template, Cursor(doc, heading._element), blocks)
+    print(f"  {title}: {len(blocks)} blocks")
 
-    cur = Cursor(doc, heading._element)
+
+def _emit(doc, template, cur, blocks: list[tuple]) -> None:
     grey = RGBColor(0x88, 0x88, 0x88)
 
     for kind, payload in blocks:
@@ -328,7 +345,6 @@ def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
                           colour=grey, size=Pt(12))
         else:
             raise ValueError(f"unknown block: {kind}")
-    print(f"  {title}: {len(blocks)} blocks")
 
 
 def append_references(doc) -> None:

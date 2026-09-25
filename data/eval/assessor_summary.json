@@ -1,0 +1,54 @@
+{
+ "questions": 60,
+ "assessors": 3,
+ "per_person": {
+  "1": {
+   "right": 44,
+   "wrong": 16,
+   "accuracy": 73.33
+  },
+  "2": {
+   "right": 44,
+   "wrong": 16,
+   "accuracy": 73.33
+  },
+  "3": {
+   "right": 44,
+   "wrong": 16,
+   "accuracy": 73.33
+  }
+ },
+ "overall": {
+  "tests": 180,
+  "right": 132,
+  "wrong": 48,
+  "accuracy": 73.33
+ },
+ "codes": {
+  "1": {
+   "n": 62,
+   "percent": 34.44
+  },
+  "2": {
+   "n": 70,
+   "percent": 38.89
+  },
+  "0": {
+   "n": 28,
+   "percent": 15.56
+  },
+  "3": {
+   "n": 20,
+   "percent": 11.11
+  }
+ },
+ "agreement": {
+  "unanimous": 56,
+  "disputed": [
+   "U-09b",
+   "U-10a",
+   "U-20b",
+   "U-22b"
+  ]
+ }
+}
