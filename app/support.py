@@ -333,6 +333,19 @@ def impossible_citations(answer: str, corpus: Corpus) -> list[str]:
     return [note for kind, note in _walk(answer, corpus) if kind == "structural"]
 
 
+def misattributed_citations(answer: str, corpus: Corpus) -> list[str]:
+    """Citations whose number exists, but not in the instrument named beside it.
+
+    Worth telling the writer about and not worth refusing over. Every time this
+    has been allowed to block it has cost a correct answer instead of catching a
+    wrong one: KSP-028, KSP-043, and two of the three wrongly refused questions
+    in the assessor run, where มาตรา 51 and ข้อ 34 both exist and were both
+    reported as missing because the name nearest them belonged to a different
+    instrument.
+    """
+    return [note for kind, note in _walk(answer, corpus) if kind == "attribution"]
+
+
 def modal_mismatches(answer: str, corpus: Corpus) -> list[str]:
     """Answers that turn a พึง into a ต้อง, or the other way round.
 
@@ -381,9 +394,21 @@ def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
         if sysid:
             rec = corpus.by_rule.get((sysid, unit, number))
             if rec is None:
-                report("structural", f"{unit} {number} ไม่มีอยู่ในเอกสารที่อ้าง")
-                continue
-            candidates = [rec]
+                # The number exists, just not under the instrument we think the
+                # sentence named. Attribution is the unreliable half of this
+                # check -- the writer shortens names, and three separate rounds
+                # lost a correct answer to it -- so a mismatch here asks for a
+                # rewrite and does not block. Only a number that exists nowhere
+                # is a fact about the corpus.
+                elsewhere = corpus.by_unit_number.get((unit, number))
+                report("attribution" if elsewhere else "structural",
+                       f"{unit} {number} ไม่ตรงกับเอกสารที่อ้างไว้ข้างหน้า"
+                       if elsewhere else f"ไม่มี{unit} {number} ในตัวบทฉบับใดเลย")
+                if not elsewhere:
+                    continue
+                candidates = elsewhere
+            else:
+                candidates = [rec]
         else:
             candidates = corpus.by_unit_number.get((unit, number), [])
             if not candidates:
@@ -434,21 +459,27 @@ def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
     return problems
 
 
-def cited_rules(answer: str, corpus: "Corpus") -> set[tuple[str, str]]:
-    """The citations in an answer that resolve to a real rule.
+def cited_rules(answer: str, corpus: "Corpus") -> set[str]:
+    """The rule numbers an answer cites that exist somewhere in the corpus.
 
     Used to stop a repair from "fixing" a flagged citation by deleting it. That
     shortens the fault list, so the accept rule passed it, and three answers in
     round seven lost a provision they had cited correctly in round six and
     gained a hedge in its place. An answer with no rule number cannot be checked
     by anyone -- which is the opposite of what these checks are for.
+
+    Numbers only, not (unit, number): correcting "มาตรา 7" to "ข้อ 7" is exactly
+    the repair the unit check asks for, and counting the unit word would make
+    that read as losing one citation and inventing another.
     """
     found = set()
     for match in CITATION.finditer(answer):
         unit, raw_number, _ = match.groups()
         number = raw_number.translate(THAI_DIGITS)
-        if corpus.by_unit_number.get((unit, number)):
-            found.add((unit, number))
+        if corpus.by_unit_number.get((unit, number)) or any(
+                corpus.by_unit_number.get((other, number))
+                for other in ("ข้อ", "มาตรา")):
+            found.add(number)
     return found
 
 

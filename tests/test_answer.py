@@ -151,20 +151,30 @@ def test_an_answer_that_cites_a_rule_number_out_of_thin_air_is_blocked(monkeypat
     assert "ข้อ 99" in a.text
 
 
-def test_calling_a_regulations_rule_a_มาตรา_is_blocked(monkeypatch):
-    """ข้อบังคับคุรุสภา has no มาตรา, so this citation points at nothing.
+def test_calling_a_regulations_rule_a_มาตรา_is_corrected_not_refused(monkeypatch):
+    """ข้อบังคับคุรุสภา has no มาตรา, so the pair is wrong.
 
-    It is the kind of slip that survives every other check -- the regulation is
-    real, the number is real, and the two together are not.
+    It is reported and rewritten rather than refused. The slip rests on having
+    attributed the citation to the right instrument, and attribution is what
+    has cost this system four correct answers across the acceptance and
+    assessor runs -- มาตรา 51 and ข้อ 34 both exist and were both refused as
+    missing because the nearest name belonged to another instrument.
     """
+    drafts = iter([
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 มาตรา 7)",
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7)",
+    ])
+
     async def fake_complete(system, user):
-        return ("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
-                "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 มาตรา 7)")
+        return next(drafts)
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
     a = run(answer_question(ANSWERABLE))
-    assert not a.in_scope
-    assert a.error == "unsupported sections"
+    assert a.in_scope and a.error is None
+    assert a.repair == "accepted"
+    assert "ข้อ 7" in a.text and "มาตรา 7" not in a.text
 
 
 def test_an_answer_that_wanders_into_civil_service_discipline_is_blocked(monkeypatch):

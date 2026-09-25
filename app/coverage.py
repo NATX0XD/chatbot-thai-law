@@ -113,12 +113,17 @@ GAPS: tuple[Gap, ...] = (
     # Also the Council, also ksp.or.th, also a regulation -- just not one of the
     # ten that were ingested. Being right about the agency makes this easier to
     # answer wrongly, not harder.
+    # Soft, unlike the others here. มาตรา 57 is in the corpus and answers
+    # "ผู้ถูกเพิกถอนใบอนุญาตขอใบอนุญาตใหม่ได้เมื่อใด" in one line, but the
+    # question says ขอใบอนุญาต and was refused as an application question. A
+    # question that also names พักใช้ or เพิกถอน is asking what the Council did
+    # to a licence, which is this corpus, not how to get one, which is not.
     Gap("การขอและต่ออายุใบอนุญาตประกอบวิชาชีพ",
         "ข้อบังคับคุรุสภาว่าด้วยใบอนุญาตประกอบวิชาชีพ ซึ่งไม่ได้อยู่ในคลังนี้",
         _p("ขอใบอนุญาต", "ขอรับใบอนุญาต", "ต่อใบอนุญาต", "ต่ออายุใบอนุญาต",
            "ขึ้นทะเบียนใบอนุญาต", "ใบอนุญาตหมดอายุ", "ตั๋วครู",
            "ค่าธรรมเนียม", "สมัครสอบ", "ทดสอบสมรรถนะ", "คุณสมบัติผู้ขอ"),
-        where=KSP),
+        where=KSP, hard=False),
     Gap("การจ้างงาน ค่าจ้าง และสวัสดิการ",
         "พระราชบัญญัติคุ้มครองแรงงาน พ.ศ. 2541",
         _p("ค่าชดเชย", "เลิกจ้าง", "ไล่ออก", "สัญญาจ้าง", "อัตราจ้าง", "ลูกจ้าง",

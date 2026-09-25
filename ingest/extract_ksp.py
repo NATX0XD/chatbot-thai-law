@@ -308,12 +308,51 @@ def records(doc: Doc):
             }
 
 
+# "ให้ยกเลิกความในข้อ ๗ แห่งข้อบังคับคุรุสภา ว่าด้วยการอุทธรณ์คำวินิจฉัย ...
+#  พ.ศ. ๒๕๔๙ และให้ใช้ความต่อไปนี้แทน" -- an amending regulation says which
+# rule of which year it replaces, and that is the only place the corpus records
+# it. Without reading this, ข้อ 7 ของ 2549 looks current: it still says eleven
+# members, and the nine-member replacement sits in a different document under a
+# different number. The assessors caught the system answering from it.
+AMENDS = re.compile(
+    r"ให้ยกเลิกความใน(ข้อ|มาตรา)\s*([๐-๙0-9]+(?:/[๐-๙0-9]+)?)"
+    r"[\s\S]{0,160}?พ\.ศ\.\s*([๐-๙0-9]{4})")
+
+
+def mark_amendments(rows: list[dict]) -> int:
+    """Point every amended rule at the rule that replaced it, and back again."""
+    by_year = {}
+    for row in rows:
+        for year in re.findall(r"25[0-9]{2}", row.get("short") or ""):
+            by_year.setdefault(year, row["sysid"])
+    index = {(r["sysid"], r["unit"], r["section"]): r for r in rows}
+
+    marked = 0
+    for row in rows:
+        for unit, number, raw_year in AMENDS.findall(row["text"]):
+            number = to_arabic(number)
+            target_id = by_year.get(to_arabic(raw_year))
+            target = index.get((target_id, unit, number)) if target_id else None
+            if target is None or target["sysid"] == row["sysid"]:
+                continue
+            target["amended_by"] = f"{row['short']} {row['unit']} {row['section']}"
+            row["amends"] = f"{target['short']} {unit} {number}"
+            marked += 1
+    return marked
+
+
 def main() -> None:
     os.makedirs(PROCESSED_DIR, exist_ok=True)
+    collected = [row for doc in DOCS for row in records(doc)]
+    marked = mark_amendments(collected)
+    by_doc: dict[str, list[dict]] = {}
+    for row in collected:
+        by_doc.setdefault(row["sysid"], []).append(row)
+
     total = 0
     with open(OUT_PATH, "w", encoding="utf-8") as handle:
         for doc in DOCS:
-            rows = list(records(doc))
+            rows = by_doc.get(doc.key, [])
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
             numbers = {r["section"] for r in rows}
@@ -322,6 +361,7 @@ def main() -> None:
             print(f"{doc.key:16s} {len(numbers):3d} {doc.unit} -> {len(rows):3d} ชิ้น{note}")
             total += len(rows)
     print(f"\n{total:,} ชิ้น -> {OUT_PATH}")
+    print(f"ข้อที่ถูกแก้ไขโดยฉบับแก้ไขเพิ่มเติม: {marked} ข้อ")
     print("ต่อไป: python -m ingest.audit_ksp")
 
 

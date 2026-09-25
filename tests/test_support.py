@@ -14,8 +14,8 @@ import pytest
 from app.config import settings
 from app.corpus_store import open_corpus
 from app.support import (
-    Corpus, cited_rules, impossible_citations, modal_mismatches,
-    unsupported_claims)
+    Corpus, cited_rules, impossible_citations, misattributed_citations,
+    modal_mismatches, unsupported_claims)
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -62,15 +62,20 @@ def test_a_rule_number_the_instrument_does_not_have(corpus):
     assert problems and "99" in problems[0]
 
 
-def test_the_unit_word_has_to_match_the_instrument(corpus):
-    """A regulation has no มาตรา, so this pair cannot exist.
+def test_the_unit_word_that_does_not_match_the_instrument_is_a_note(corpus):
+    """A regulation has no มาตรา, so "ข้อบังคับฯ 2556 มาตรา 50" is wrong.
 
-    The tester caught this one twice over: an answer that counted the five
-    duties correctly and then attributed them to "ข้อบังคับฯ 2556 มาตรา 50".
+    Wrong, and not worth refusing over. It reads as a fact -- regulations have
+    ข้อ, acts have มาตรา -- but it rests on having attributed the citation to
+    the right instrument, and that is the unreliable half. The same shape
+    appears in "...2568 ข้อ 9 และ มาตรา 51", where มาตรา 51 belongs to the act
+    the sentence did not name again; blocking that refused a question the corpus
+    answers in full. So it goes to the writer as a correction instead.
     """
-    problems = impossible_citations(
-        "จรรยาบรรณต่อผู้รับบริการมี 5 ข้อ ตามข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ "
-        "2556 มาตรา 50", corpus)
+    answer = ("จรรยาบรรณต่อผู้รับบริการมี 5 ข้อ ตามข้อบังคับคุรุสภา "
+              "จรรยาบรรณของวิชาชีพ 2556 มาตรา 50")
+    assert impossible_citations(answer, corpus) == []
+    problems = misattributed_citations(answer, corpus)
     assert problems and "50" in problems[0]
 
 
@@ -258,7 +263,9 @@ def test_the_rules_an_answer_cites_are_counted(corpus):
     answer = ("ครูต้องไม่ดูหมิ่นศิษย์ (ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตาม"
               "จรรยาบรรณ 2550 ข้อ 7) และพึงช่วยเหลือเกื้อกูลกัน "
               "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
-    assert cited_rules(answer, corpus) == {("ข้อ", "7"), ("ข้อ", "14")}
+    assert cited_rules(answer, corpus) == {"7", "14"}
+    # correcting the unit word is a repair, not the loss of a citation
+    assert cited_rules(answer.replace("ข้อ 7", "มาตรา 7"), corpus) == {"7", "14"}
     hedged = "ครูควรประพฤติตนให้เหมาะสมตามจรรยาบรรณของวิชาชีพ"
     assert not cited_rules(hedged, corpus) >= cited_rules(answer, corpus)
 

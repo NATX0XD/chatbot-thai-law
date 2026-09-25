@@ -53,8 +53,8 @@ from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
-    Corpus as SupportIndex, cited_rules, impossible_citations, modal_mismatches,
-    unsupported_claims)
+    Corpus as SupportIndex, cited_rules, impossible_citations,
+    misattributed_citations, modal_mismatches, unsupported_claims)
 from app.verify import unsupported_laws
 
 log = logging.getLogger(__name__)
@@ -121,6 +121,8 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
 3. ห้ามแต่งเลขข้อหรือเลขมาตรา ถ้าไม่แน่ใจเลขข้อ ให้อธิบายโดยไม่ใส่เลข
 4. ถ้าตัวบทไหนมีคำว่า (ยกเลิกแล้ว) กำกับอยู่ ห้ามอ้างเป็นกฎที่ใช้อยู่
    ให้ใช้ฉบับที่ไม่ได้ถูกยกเลิก และบอกผู้ใช้ได้ว่าฉบับเก่าถูกยกเลิกไปแล้ว
+   ถ้าตัวบทไหนมีบรรทัด (ข้อนี้ถูกยกเลิกและแทนที่แล้วโดย ...) ห้ามตอบตามข้อความของข้อนั้น
+   ให้หาข้อความของฉบับแก้ไขในตัวบทที่ให้มา แล้วตอบตามฉบับแก้ไข พร้อมบอกว่าแก้ไขเมื่อใด
 5. ถ้าตัวบทไม่พอจะตอบ บอกตรง ๆ ว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้ ห้ามเดา
    โดยเฉพาะคำถามที่ถามหาตัวเลข เช่น จำนวนชั่วโมงอบรม ถ้าตัวบทไม่ได้กำหนดไว้ ให้บอกว่าไม่ได้กำหนด
    ห้ามเติมเงื่อนไข ระยะเวลา หรือขั้นตอนที่ตัวบทไม่ได้เขียน แม้จะฟังดูสมเหตุสมผลก็ตาม
@@ -297,6 +299,25 @@ def with_chapter_siblings(hits: list[Hit], corpus, question: str = "") -> list[H
     return hits + [Hit(rec=rec, rrf=0.0) for rec in corpus if belongs(rec)]
 
 
+def with_amendments(hits: list[Hit], corpus) -> list[Hit]:
+    """Put the replacing rule beside any retrieved rule that was replaced.
+
+    Marking the old rule as superseded is not enough on its own: the new text
+    lives in a different document under a different number, and if it was not
+    retrieved the model has nothing to answer from and falls back on the old
+    one. ข้อ 7 ของข้อบังคับฯ 2549 and its replacement in ฉบับที่ 2 พ.ศ. 2569
+    ข้อ 3 are the pair this exists for.
+    """
+    wanted = {h.rec["amended_by"] for h in hits if h.rec.get("amended_by")}
+    if not wanted:
+        return hits
+    have = {h.rec["id"] for h in hits}
+    extra = [rec for rec in corpus
+             if rec["id"] not in have
+             and f"{rec.get('short')} {rec.get('unit')} {rec['section']}" in wanted]
+    return hits + [Hit(rec=rec, rrf=0.0) for rec in extra]
+
+
 def order_for_reading(hits: list[Hit]) -> list[Hit]:
     """Put the regulation that states the duties first, ranking aside.
 
@@ -322,6 +343,15 @@ def build_context(hits: list[Hit]) -> str:
         chapters = h.rec.get("chapters") or []
         if chapters:
             head += "\n    (อยู่ใน " + " > ".join(chapters) + ")"
+        # A rule can be replaced without its document being repealed. ข้อ 7 ของ
+        # ข้อบังคับฯ 2549 still reads "สิบเอ็ดคน" in the corpus; ฉบับที่ 2 พ.ศ.
+        # 2569 ข้อ 3 replaced it with nine, and the assessors caught the system
+        # answering from the old text with no sign that it was old.
+        if h.rec.get("amended_by"):
+            head += (f"\n    (ข้อนี้ถูกยกเลิกและแทนที่แล้วโดย {h.rec['amended_by']} "
+                     f"— ห้ามตอบตามข้อความข้างล่างนี้ ให้ใช้ข้อความของฉบับแก้ไข)")
+        if h.rec.get("amends"):
+            head += f"\n    (ข้อนี้เป็นข้อความที่ใช้แทน {h.rec['amends']})"
         blocks.append(f"{head}\n{h.rec['text']}")
     return "\n\n".join(blocks)
 
@@ -408,6 +438,10 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     for problem in impossible_citations(text, _support_index()):
         faults.append(Fault(problem, blocks=True, kind="unsupported sections"))
 
+    # the number is real, the instrument beside it is not the one that has it
+    for problem in misattributed_citations(text, _support_index()):
+        faults.append(Fault(problem, blocks=False, kind="misattributed"))
+
     # พึง against ต้อง is two words compared against the text that contains
     # them. It is the only part of the lexical pass that earned a call: over
     # rounds seven and eight it is the one true catch that turned into a
@@ -470,8 +504,9 @@ async def answer_question(question: str) -> Answer:
     # Everything downstream reads this list, not the raw ranking: the guards
     # have to judge the answer against exactly what the model was shown, or
     # citing a rule that was added as a chapter sibling looks like an invention.
-    hits = order_for_reading(
-        with_chapter_siblings(hits, get_retriever().corpus, question))
+    corpus = get_retriever().corpus
+    hits = order_for_reading(with_amendments(
+        with_chapter_siblings(hits, corpus, question), corpus))
     user_prompt = (f"คำถามของประชาชน\n{question}\n\n"
                    f"ตัวบทที่ค้นได้\n{build_context(hits)}")
     try:
