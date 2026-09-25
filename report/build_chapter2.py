@@ -48,11 +48,9 @@ MARKDOWN4 = os.path.join(HERE, "บทที่4-ผลการดำเนิ�
 
 FIGURE_WIDTH = Inches(6.0)     # fits the KMUTNB margins with room to spare
 INDENT = Inches(0.5)           # the thesis indents the first line of a paragraph
-# Thai Distributed. Ordinary justification stretches the spaces between words,
-# and Thai does not put spaces between words -- so it stretches only at phrase
-# breaks and leaves ragged gaps. This one distributes across the characters,
-# which is what Word's Thai Distributed button does and what the thesis uses.
-BODY_ALIGN = WD_ALIGN_PARAGRAPH.THAI_JUSTIFY
+# Body paragraphs take their alignment from the document's own style. Thai
+# Distributed was tried here and taken out on the author's instruction.
+BODY_ALIGN = None
 
 
 # ------------------------------------------------------------------- helpers
@@ -189,29 +187,8 @@ def write_docx() -> None:
     write_chapter(doc, template, "ทฤษฎีที่เกี่ยวข้อง", CHAPTER)
 
     append_references(doc)
-    thai_distribute(doc)
     doc.save(TARGET)
     print("wrote", TARGET)
-
-
-def thai_distribute(doc) -> None:
-    """Set Thai Distributed on every body paragraph, including the ones already
-    in the thesis, so the whole book sets the same way.
-
-    Left alone: headings, figure and table captions, and anything short enough
-    to be a label rather than a paragraph -- distributing a three-word line
-    stretches it across the full measure, which looks like a mistake.
-    """
-    changed = 0
-    for para in doc.paragraphs:
-        if para.style.name != "Normal" or len(para.text.strip()) < 80:
-            continue
-        if para.alignment == WD_ALIGN_PARAGRAPH.CENTER:
-            continue
-        if para.alignment != BODY_ALIGN:
-            para.alignment = BODY_ALIGN
-            changed += 1
-    print(f"  Thai Distributed applied to {changed} more paragraphs")
 
 
 def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
