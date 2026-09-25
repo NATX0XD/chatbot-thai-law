@@ -158,8 +158,11 @@ def _blocks_for(text: str, markers: list[str]) -> list[str]:
     numbers = [m for m in markers if m not in LETTERS]
     blocks = _lettered_blocks(text, letters[0] if letters else None)
 
+    # "(ข)(๑)(๒)" names two items under (ข), not an item inside an item. Each
+    # number is looked for in the lettered block on its own; nesting them made
+    # the checker refuse a correct answer that cited two sub-items at once.
+    narrowed = []
     for number in numbers:
-        narrowed = []
         for block in blocks:
             found = next((block.find(form) for form in _forms(number)
                           if form in block), -1)
@@ -171,8 +174,7 @@ def _blocks_for(text: str, markers: list[str]) -> list[str]:
             ends = [rest.find(form) for n in range(1, 30)
                     for form in _forms(str(n)) if form in rest]
             narrowed.append(block[:1 + min(ends)] if ends else block)
-        blocks = narrowed
-    return blocks
+    return narrowed if numbers else blocks
 
 
 def _missing_sub_item(markers: list[str], candidates: list[dict]) -> str | None:

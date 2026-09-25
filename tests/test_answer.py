@@ -125,8 +125,7 @@ def test_an_answer_that_names_a_regulation_we_never_supplied_is_blocked(monkeypa
     this corpus. An answer citing it reads exactly like a correct one.
     """
     async def fake_complete(system, user):
-        return ("ครูต้องมีมาตรฐานการปฏิบัติตน "
-                "(ข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ พ.ศ. 2556 ข้อ 11)")
+        return "ครูต้องมีมาตรฐานการปฏิบัติตนตามข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ พ.ศ. 2556"
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
     a = run(answer_question(ANSWERABLE))
@@ -134,11 +133,14 @@ def test_an_answer_that_names_a_regulation_we_never_supplied_is_blocked(monkeypa
     assert a.error == "unsupported citations"
 
 
-def test_an_answer_that_cites_a_rule_number_out_of_thin_air_is_blocked(monkeypatch):
-    """The failure a reader cannot see.
+def test_a_rule_number_the_model_typed_itself_never_reaches_the_reader(monkeypatch):
+    """The failure a reader cannot see, and the reason numbers are no longer
+    the model's to write.
 
-    The instrument is right, the wording is plausible, and the number sends them
-    to a rule about something else entirely.
+    The instrument is right, the wording is plausible, and the number sends
+    them to a rule about something else. Rather than refuse the answer, the
+    hand-written citation is removed: what is left is true, and nothing false
+    is printed. Three assessor rounds found this class of fault dominant.
     """
     async def fake_complete(system, user):
         return ("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
@@ -146,35 +148,26 @@ def test_an_answer_that_cites_a_rule_number_out_of_thin_air_is_blocked(monkeypat
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
     a = run(answer_question(ANSWERABLE))
-    assert not a.in_scope
-    assert a.error == "unsupported sections"
-    assert "ข้อ 99" in a.text
+    assert "ข้อ 99" not in a.text
+    assert "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์" in a.text
+    assert any("ข้อ 99" in f for f in a.faults)
 
 
-def test_calling_a_regulations_rule_a_มาตรา_is_corrected_not_refused(monkeypatch):
-    """ข้อบังคับคุรุสภา has no มาตรา, so the pair is wrong.
+def test_the_unit_word_cannot_be_got_wrong_any_more(monkeypatch):
+    """ข้อบังคับคุรุสภา has no มาตรา, and the model no longer chooses.
 
-    It is reported and rewritten rather than refused. The slip rests on having
-    attributed the citation to the right instrument, and attribution is what
-    has cost this system four correct answers across the acceptance and
-    assessor runs -- มาตรา 51 and ข้อ 34 both exist and were both refused as
-    missing because the nearest name belonged to another instrument.
+    It points at the evidence and the unit word is read off the record with
+    everything else, so "ข้อบังคับฯ ... มาตรา 7" is not a mistake it is able to
+    make. The guard that used to catch it -- and that refused four correct
+    answers over three rounds getting there -- has nothing left to do here.
     """
-    drafts = iter([
-        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
-        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 มาตรา 7)",
-        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
-        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7)",
-    ])
-
     async def fake_complete(system, user):
-        return next(drafts)
+        return "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ [1]"
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
     a = run(answer_question(ANSWERABLE))
     assert a.in_scope and a.error is None
-    assert a.repair == "accepted"
-    assert "ข้อ 7" in a.text and "มาตรา 7" not in a.text
+    assert "ข้อ" in a.text and "มาตรา" not in a.text
 
 
 def test_an_answer_that_wanders_into_civil_service_discipline_is_blocked(monkeypatch):
@@ -345,3 +338,61 @@ def test_a_repealed_regulation_is_marked_in_the_context_the_model_sees(spy_llm):
     run(answer_question("การสอบสวนการประพฤติผิดจรรยาบรรณทำอย่างไร"))
     system = spy_llm[0]["system"]
     assert "ยกเลิกแล้ว" in system, "the prompt must explain the marker"
+
+
+# --- citations assembled from the record, not typed by the model -------------
+
+
+def _piece(section, *, sysid="ksp-2550", chapter=None, short=None):
+    return answer_mod.Hit(rec={
+        "id": f"{sysid}:{section}", "sysid": sysid, "unit": "ข้อ",
+        "section": section, "act": "", "text": "",
+        "short": short or "ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550",
+        "chapters": [chapter] if chapter else [],
+    }, rrf=0.0)
+
+
+TEACHER = "หมวด 1 แบบแผนพฤติกรรมตามจรรยาบรรณของวิชาชีพครู"
+HEAD = "หมวด 2 แบบแผนพฤติกรรมตามจรรยาบรรณของวิชาชีพผู้บริหารสถานศึกษา"
+
+
+def test_a_pointer_becomes_the_citation_of_the_evidence_it_points_at():
+    """Three assessor rounds measured the same fault: the sentence is right and
+    the number beside it is not. The model typed 266 rule numbers across 60
+    answers; now it points and the citation is read off the record."""
+    hits = [_piece("7", chapter=TEACHER), _piece("12", chapter=HEAD)]
+    text, typed = answer_mod.resolve_citations(
+        "ครูต้องไม่ดูหมิ่นศิษย์ [1](ข)(๓) ส่วนผู้บริหาร [2]", hits)
+    assert "ข้อ 7(ข)(๓)" in text and "ข้อ 12" in text
+    assert not typed
+
+
+def test_the_citation_says_whose_duty_it_is():
+    """ข้อบังคับฯ 2550 states the same five duties four times, once per kind of
+    practitioner. Quoting one profession's rule for another was the commonest
+    fault the assessors found, so the citation names the profession."""
+    text, _ = answer_mod.resolve_citations("[1] และ [2]",
+                                           [_piece("7", chapter=TEACHER),
+                                            _piece("12", chapter=HEAD)])
+    assert "หมวดของครู" in text
+    assert "หมวดของผู้บริหารสถานศึกษา" in text
+
+
+def test_a_pointer_at_evidence_that_was_never_supplied_disappears():
+    text, _ = answer_mod.resolve_citations("ตามที่กำหนดไว้ [9]",
+                                           [_piece("7", chapter=TEACHER)])
+    assert "[9]" not in text and "9" not in text
+
+
+def test_a_number_the_model_typed_itself_is_reported():
+    """The whole point is that it stops doing this, so it has to be visible."""
+    text, typed = answer_mod.resolve_citations(
+        "ตามข้อ 99 และ [1]", [_piece("7", chapter=TEACHER)])
+    assert typed == ["ข้อ 99"]
+
+
+def test_an_act_citation_carries_no_profession():
+    """Only ข้อบังคับฯ 2550 repeats itself by profession."""
+    text, _ = answer_mod.resolve_citations("[1]", [_piece(
+        "54", sysid="act-2546", short="พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546")])
+    assert "หมวดของ" not in text

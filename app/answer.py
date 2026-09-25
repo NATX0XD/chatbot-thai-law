@@ -112,11 +112,12 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
 
 เนื้อหา
 1. ตอบจากตัวบทที่ให้มาเท่านั้น ห้ามใช้ความรู้อื่น
-2. ทุกข้อความที่เป็นสาระ ต้องอ้างที่มาในวงเล็บ โดยคัดลอกชื่อที่กำกับหน้าตัวบทแต่ละชิ้นมาทั้งบรรทัด
-   เช่น (ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 7) หรือ (พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546 มาตรา 54)
-   ห้ามย่อชื่อเอง ห้ามสลับชื่อข้ามฉบับ และห้ามเปลี่ยนคำว่า "ข้อ" เป็น "มาตรา" หรือกลับกัน
-   ข้อบังคับคุรุสภาใช้คำว่า "ข้อ" พระราชบัญญัติใช้คำว่า "มาตรา" ข้อบังคับไม่มีมาตรา
-3. ห้ามแต่งเลขข้อหรือเลขมาตรา ถ้าไม่แน่ใจเลขข้อ ให้อธิบายโดยไม่ใส่เลข
+2. ทุกข้อความที่เป็นสาระ ต้องอ้างที่มาด้วยเลขในวงเล็บเหลี่ยมของตัวบทที่ให้มา เช่น [1] [3]
+   ห้ามพิมพ์ชื่อกฎหมาย เลขข้อ หรือเลขมาตราเอง ระบบจะเติมชื่อและเลขที่ถูกต้องให้เองจาก [เลข] ที่คุณใส่
+   ถ้าจะอ้างอนุข้อด้วย ให้เขียนต่อท้ายเลขในวงเล็บเหลี่ยม เช่น [2](ข)(๓)
+   ตัวอย่าง: "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ [2](ข)(๓)"
+3. ถ้าไม่แน่ใจว่าข้อความอยู่ในตัวบทชิ้นไหน ให้อธิบายโดยไม่ใส่เลขในวงเล็บเหลี่ยม
+   ห้ามเดาว่าเป็นชิ้นไหน เพราะเลขที่ใส่จะถูกแปลงเป็นเลขข้อจริง
 4. ถ้าตัวบทไหนมีคำว่า (ยกเลิกแล้ว) กำกับอยู่ ห้ามอ้างเป็นกฎที่ใช้อยู่
    ให้ใช้ฉบับที่ไม่ได้ถูกยกเลิก และบอกผู้ใช้ได้ว่าฉบับเก่าถูกยกเลิกไปแล้ว
    ถ้าตัวบทไหนมีบรรทัด (ข้อนี้ถูกยกเลิกและแทนที่แล้วโดย ...) ห้ามตอบตามข้อความของข้อนั้น
@@ -376,6 +377,70 @@ def _support_index() -> SupportIndex:
     return _support
 
 
+# "[2](ข)(๓)" -- the model points at the second piece of evidence and, if it
+# wants, at a sub-item inside it. Everything else about the citation is filled
+# in from the record.
+MARKER = re.compile(r"\[(\d{1,2})\]((?:\s*\([ก-ฮ๐-๙0-9]{1,3}\))*)")
+# a rule number the model typed itself, which is the thing being taken away
+TYPED_NUMBER = re.compile(r"(?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}")
+# a whole hand-written citation: "(ข้อบังคับคุรุสภา ... ข้อ 99)". Removing only
+# the number would leave the instrument's name dangling in an empty bracket.
+TYPED_CITATION = re.compile(r"\([^()\[\]]*(?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}[^()]*\)")
+
+
+def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
+    """Turn the model's [n] markers into real citations, and report the rest.
+
+    Three assessor rounds measured the same thing three times: the answers are
+    right and the numbers beside them are not. Across 180 judgements the
+    dominant fault was a clause quoted correctly and attributed to the wrong
+    ข้อ, most often to another profession's chapter of ข้อบังคับฯ 2550, which
+    repeats the same five duties four times over. The model typed 266 rule
+    numbers across 60 answers, and every one was a chance to get it wrong.
+
+    So it no longer types them. It points at the evidence it was given, and the
+    citation is assembled from that record -- instrument, unit, number and the
+    chapter that says whose duty it is. A pointer is either in range or it is
+    not; there is no wrong-but-plausible version of it.
+    """
+    # Numbers the model typed in prose are removed, not just reported. It still
+    # narrates them -- "อยู่ในข้อ 7 จรรยาบรรณต่อตนเอง" -- and those are the ones
+    # that are wrong, while the sentence around them is not. Deleting the number
+    # leaves "อยู่ในจรรยาบรรณต่อตนเอง", which is true and still useful; keeping
+    # it leaves a false statement a reader cannot check.
+    stray = TYPED_NUMBER.findall(MARKER.sub("", text))
+    text = TYPED_CITATION.sub("", MARKER.sub(lambda m: m.group(0), text))
+    text = TYPED_NUMBER.sub("", text)
+
+    def swap(match: re.Match) -> str:
+        index = int(match.group(1)) - 1
+        if not 0 <= index < len(hits):
+            return ""          # a pointer at evidence that was never supplied
+        rec = hits[index].rec
+        subs = "".join(match.group(2).split())
+        return f"({hits[index].citation}{subs}{_whose(rec)})"
+
+    text = MARKER.sub(swap, text)
+    return re.sub(r"[ \t]{2,}", " ", text), stray
+
+
+def _whose(rec: dict) -> str:
+    """Which practitioner a rule of ข้อบังคับฯ 2550 belongs to.
+
+    That regulation states the same five duties four times, once for ครู, once
+    for each kind of administrator, and once for ศึกษานิเทศก์. Quoting one
+    profession's rule for another was the single commonest fault the assessors
+    found, so the profession is named in the citation rather than left to be
+    inferred from a number.
+    """
+    if rec.get("sysid") != ILLUSTRATES_THE_DUTIES:
+        return ""
+    chapters = rec.get("chapters") or []
+    head = chapters[0] if chapters else ""
+    _, _, who = head.partition("ของวิชาชีพ")
+    return f" หมวดของ{who.strip()}" if who.strip() else ""
+
+
 @dataclass
 class Fault:
     """Something wrong with a draft answer, and what to do about it.
@@ -527,7 +592,15 @@ async def answer_question(question: str) -> Answer:
             citations=[h.citation for h in hits],
             hits=hits, error="degenerate answer")
 
+    text, typed = resolve_citations(text, hits)
+    if typed:
+        log.info("TYPED NUMBERS %s | %r", typed[:3], question[:70])
+
     faults = inspect(text, hits)
+    for number in dict.fromkeys(typed):
+        faults.append(Fault(
+            f"คำตอบพิมพ์ “{number}” เอง ให้ใช้เลขในวงเล็บเหลี่ยมของตัวบทแทน",
+            blocks=False, kind="typed citation"))
     found = [f.note for f in faults]
     repair = "not attempted"
     if any(f.acts for f in faults):
