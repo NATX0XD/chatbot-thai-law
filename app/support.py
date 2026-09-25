@@ -50,8 +50,15 @@ Two extensions the sixth round asked for, both here:
     whole rule, which is the only way a wrong sub-item number is visible -- the
     words are all in the rule either way.
 
-And one check that is not about citations at all: conviction_on_thin_evidence,
-for answers that rule on conduct no rule mentions.
+A fourth check was tried here and removed. It refused to let an answer convict
+when BM25 after query expansion was below 10, on the theory that no rule used
+the words the question used. Round seven measured it: three false positives on
+questions the corpus answers well, and it did not fire on the case it was
+written for. The reason is structural, not a threshold. This corpus writes at a
+high level -- อบายมุข, สิ่งเสพติด, สิ่งแวดล้อม -- and teachers ask about เหล้า,
+ขยะ, การพนัน. Nine in-domain cases have the conduct word absent from the corpus
+and covered by a broader term. Word overlap measures vocabulary, not coverage,
+and no threshold separates them.
 """
 from __future__ import annotations
 
@@ -69,6 +76,10 @@ CITATION = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3}(?:/[๐
 SUB_ITEM = re.compile(r"\(([ก-ฮ๐-๙0-9]{1,3})\)")
 # the Buddhist year in an instrument's name, which identifies it on its own
 YEAR = re.compile(r"25[0-9]{2}")
+# the word an instrument's name starts with. One of these between the name we
+# matched and the citation means the citation belongs to an instrument we failed
+# to recognise, not to the one we found.
+INSTRUMENT = re.compile(r"พ\.ร\.บ\.|พระราชบัญญัติ|ข้อบังคับ|ประกาศ|ระเบียบ|กฎกระทรวง")
 # "มาตรา 9 ข้อ ๑" is one citation and a pointer into it, not two citations. The
 # writer keeps using ข้อ for sub-items even though the prompt asks for "(๑)",
 # and reading the second half as a citation to ข้อ 1 rejected a correct answer
@@ -104,48 +115,68 @@ def _has(text: str, marker: str) -> bool:
     return any(form in text for form in _forms(marker))
 
 
-def _block_for(text: str, markers: list[str]) -> str | None:
-    """The part of a rule a pointer like "(ข)(๑)" actually points at.
+def _lettered_blocks(text: str, letter: str | None) -> list[str]:
+    """The lettered blocks a pointer could mean.
 
-    Returns None when the pointer lands nowhere. Narrowing matters twice over:
-    it is how "(ก)(๕)" is caught -- ข้อ 8 ของข้อบังคับฯ 2550 lists two desirable
-    behaviours under (ก) and five undesirable ones under (ข), so looking for
-    "(๕)" anywhere in the rule finds it while the pointer means nothing -- and it
-    is what lets a claim be compared against the sub-item it cites rather than
-    against the whole rule, which is how a wrong sub-item number gets noticed.
+    With a letter, one block. Without one, every block there is -- because a
+    pointer like "ข้อ 6 (๖)" is *ambiguous*, not wrong. ข้อ 6 ของข้อบังคับฯ 2550
+    has both "(ก)(๖) เลือกใช้หลักวิชาที่ถูกต้อง" and "(ข)(๖) ใช้หลักวิชาการที่ไม่
+    ถูกต้อง ... เกิดความเสียหาย", and reading only the first made the checker
+    report a correct prohibition as unsupported. The tester found that one; I had
+    reported it as a real catch.
+    """
+    if letter is not None:
+        start = text.find(f"({letter})")
+        if start < 0:
+            return []
+        after = text[start + 3:]
+        ends = [after.find(f"({other})") for other in LETTERS
+                if other != letter and f"({other})" in after]
+        return [after[:min([e for e in ends if e >= 0], default=len(after))]]
+
+    starts = sorted(text.find(f"({other})") for other in LETTERS
+                    if f"({other})" in text)
+    if not starts:
+        return [text]
+    bounds = starts + [len(text)]
+    return [text[bounds[i]:bounds[i + 1]] for i in range(len(starts))]
+
+
+def _blocks_for(text: str, markers: list[str]) -> list[str]:
+    """Every part of a rule the pointer could be naming. Empty means nowhere.
+
+    Narrowing matters twice over: it is how "(ก)(๕)" is caught -- ข้อ 8 ของ
+    ข้อบังคับฯ 2550 lists two desirable behaviours under (ก) and five undesirable
+    ones under (ข), so looking for "(๕)" anywhere in the rule finds it while the
+    pointer means nothing -- and it is what lets a claim be compared against the
+    sub-item it cites rather than against the whole rule.
     """
     letters = [m for m in markers if m in LETTERS]
     numbers = [m for m in markers if m not in LETTERS]
-
-    if letters:
-        start = text.find(f"({letters[0]})")
-        if start < 0:
-            return None
-        after = text[start + 3:]
-        ends = [after.find(f"({other})") for other in LETTERS
-                if other != letters[0] and f"({other})" in after]
-        text = after[:min([e for e in ends if e >= 0], default=len(after))]
+    blocks = _lettered_blocks(text, letters[0] if letters else None)
 
     for number in numbers:
-        found = next((text.find(form) for form in _forms(number)
-                      if form in text), -1)
-        if found < 0:
-            return None
-        text = text[found:]
-        # up to whichever numbered item comes next, whatever its number
-        rest = text[1:]
-        ends = [rest.find(form) for n in range(1, 30)
-                for form in _forms(str(n)) if form in rest]
-        if ends:
-            text = text[:1 + min(ends)]
-    return text
+        narrowed = []
+        for block in blocks:
+            found = next((block.find(form) for form in _forms(number)
+                          if form in block), -1)
+            if found < 0:
+                continue
+            block = block[found:]
+            # up to whichever numbered item comes next, whatever its number
+            rest = block[1:]
+            ends = [rest.find(form) for n in range(1, 30)
+                    for form in _forms(str(n)) if form in rest]
+            narrowed.append(block[:1 + min(ends)] if ends else block)
+        blocks = narrowed
+    return blocks
 
 
 def _missing_sub_item(markers: list[str], candidates: list[dict]) -> str | None:
     if not markers:
         return None
     for rec in candidates:
-        if _block_for(rec["text"], markers) is not None:
+        if _blocks_for(rec["text"], markers):
             return None
     return "".join(f"{m})(" for m in markers)[:-2]
 
@@ -219,8 +250,18 @@ class Corpus:
             for key, sysid in table.items():
                 found = window.rfind(key)
                 if found >= 0 and (best is None or found > best[0]):
-                    best = (found, sysid)
-        return best[1] if best else None
+                    best = (found, sysid, len(key))
+        if best is None:
+            return None
+        # "...2568 ข้อ 46 และ พ.ร.บ.สภาครูฯ มาตรา 52" -- the short form matches no
+        # name and carries no year, so the search fell back to the regulation
+        # named earlier and reported มาตรา 52, which exists, as missing. An
+        # instrument word standing between the two means we do not know which
+        # instrument this citation belongs to, and not knowing is not a fault in
+        # the answer.
+        if INSTRUMENT.search(window[best[0] + best[2]:]):
+            return None
+        return best[1]
 
 
 def _content(text: str) -> list[str]:
@@ -344,9 +385,9 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
         # the sub-item the citation points at, if it points at one: a claim that
         # belongs to (ข)(๓) and cites (ข)(๑) matches the rule and not the item,
         # which is the commonest wrong pointer the acceptance runs turn up
-        texts = [_block_for(rec["text"], markers) or rec["text"]
-                 for rec in candidates] if markers else \
-                [rec["text"] for rec in candidates]
+        texts = [block for rec in candidates
+                 for block in (_blocks_for(rec["text"], markers) or [rec["text"]])] \
+            if markers else [rec["text"] for rec in candidates]
 
         supported = False
         for window in windows:
@@ -367,59 +408,22 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
     return problems
 
 
-# "ครูไปหาเสียงช่วยผู้สมัคร ส.ส. ผิดจรรยาบรรณไหม" -- a question that invites a
-# verdict, and the regulations do not address it
-VERDICT_ASKED = re.compile(r"ผิด(จรรยาบรรณ|ไหม|หรือไม่|มั้ย|รึเปล่า)|"
-                           r"เข้าข่าย|ทำได้ไหม|ได้ไหม|ควรไหม")
-VERDICT_GIVEN = re.compile(r"(ถือว่า|ถือเป็น|เข้าข่าย|จึง)\s*(การ)?(กระทำ)?ผิด|"
-                           r"ผิดจรรยาบรรณ(?!ไหม|หรือไม่)|ละเมิดจรรยาบรรณ|"
-                           r"เป็นการฝ่าฝืน|ขัด(ต่อ|กับ)จรรยาบรรณ|"
-                           r"ฝ่าฝืนจรรยาบรรณ|ไม่พึงประสงค์ตามข้อ")
-NOT_A_BREACH = re.compile(r"ไม่ได้เขียน|ไม่ได้กำหนด|ไม่มีข้อ|ไม่ได้ระบุ|"
-                          r"ไม่ปรากฏ|ไม่ได้ห้าม|ไม่ถือว่าผิด|ไม่เข้าข่าย")
-# Below this BM25 score, no rule uses the words the question uses -- see
-# conviction_on_thin_evidence for how the number was picked.
-THIN_EVIDENCE = 10.0
+def cited_rules(answer: str, corpus: "Corpus") -> set[tuple[str, str]]:
+    """The citations in an answer that resolve to a real rule.
 
-
-def conviction_on_thin_evidence(question: str, answer: str,
-                                bm25_top: float) -> bool:
-    """A verdict of "that breaks the code" with no rule that mentions the conduct.
-
-    Six rounds of acceptance testing never moved this group with instructions.
-    The standing example: a teacher canvassing for a parliamentary candidate. The
-    regulations say nothing about it -- the political restrictions on civil
-    servants live in an act this corpus does not hold -- and the answer convicts
-    anyway, by reaching for ข้อ 15 about ยึดมั่นในระบอบประชาธิปไตย.
-
-    The signal is BM25, not the dense score and not word overlap with the
-    question. Word overlap is the wrong test in this corpus: users write ด่า and
-    the rules write ดูหมิ่นเหยียดหยาม, which is what app/query_expand.py exists
-    to bridge, so a question the corpus answers well can share no word with it.
-    BM25 is measured *after* that bridge, and it separates cleanly where the
-    dense score does not:
-
-        conduct the rules address    ด่านักเรียน 35.9  นินทาเพื่อนครู 44.6
-                                     เรียกเงิน 41.0    มีชู้ 23.9
-                                     หลักวิชาผิด 11.9  (the lowest measured)
-        conduct they do not          หาเสียงให้ ส.ส. 8.5   ขายประกัน 7.7
-                                     ขับรถเร็ว 6.4        ย้อมผม 6.4
-        dense, for both              0.52 -- 0.71, no separation at all
-
-    This does not block. It adds a line to the repair turn, and the model still
-    holds the evidence: if a rule really does cover the conduct it can keep the
-    verdict. A false positive costs a sentence, not an answer.
+    Used to stop a repair from "fixing" a flagged citation by deleting it. That
+    shortens the fault list, so the accept rule passed it, and three answers in
+    round seven lost a provision they had cited correctly in round six and
+    gained a hedge in its place. An answer with no rule number cannot be checked
+    by anyone -- which is the opposite of what these checks are for.
     """
-    if bm25_top >= THIN_EVIDENCE or not VERDICT_ASKED.search(question):
-        return False
-    verdicts = [m.start() for m in VERDICT_GIVEN.finditer(answer)]
-    if not verdicts:
-        return False
-    # An answer that hedges and then convicts anyway is still convicting, and it
-    # is the commoner shape: "ตัวบทไม่ได้ระบุชัดเจนว่าห้าม ... แต่ ... ถือว่าผิด
-    # จรรยาบรรณ". Only a disclaimer that has the last word counts as one.
-    hedges = [m.start() for m in NOT_A_BREACH.finditer(answer)]
-    return not hedges or max(verdicts) > max(hedges)
+    found = set()
+    for match in CITATION.finditer(answer):
+        unit, raw_number, _ = match.groups()
+        number = raw_number.translate(THAI_DIGITS)
+        if corpus.by_unit_number.get((unit, number)):
+            found.add((unit, number))
+    return found
 
 
 def _modal(claim: str, texts: list[str], unit: str, number: str, report) -> None:

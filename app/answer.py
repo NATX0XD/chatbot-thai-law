@@ -53,7 +53,7 @@ from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
-    Corpus as SupportIndex, conviction_on_thin_evidence, impossible_citations,
+    Corpus as SupportIndex, cited_rules, impossible_citations,
     unsupported_claims)
 from app.verify import unsupported_laws
 
@@ -100,20 +100,6 @@ REPAIR = """
 ถ้าข้อที่อ้างไม่ได้เขียนเรื่องที่ถามไว้ ให้บอกตามตรงว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้
 แล้วอธิบายว่าข้อที่ใกล้เคียงที่สุดพูดถึงอะไร ดีกว่าอ้างข้อที่ไม่ตรง
 ตอบเฉพาะคำตอบใหม่ ไม่ต้องอธิบายว่าแก้อะไร"""
-
-THIN = ("ตัวบทที่ค้นได้ไม่มีข้อใดกล่าวถึงพฤติกรรมที่ถามโดยตรง "
-        "ถ้าไม่มีข้อใดเขียนเรื่องนี้ไว้จริง ๆ อย่าฟันธงว่าผิดจรรยาบรรณ "
-        "ให้บอกว่าข้อบังคับจรรยาบรรณไม่ได้เขียนเรื่องนี้ไว้โดยตรง "
-        "และถ้าเรื่องนี้มีกฎหมายอื่นกำกับอยู่ ให้บอกว่าอยู่นอกคลังนี้")
-
-NO_RULE = (
-    "ข้อบังคับจรรยาบรรณที่อยู่ในคลังนี้ไม่ได้เขียนเรื่องนี้ไว้โดยตรงครับ "
-    "ผมจึงไม่ฟันธงว่าผิดหรือไม่ผิด เพราะการฟันธงโดยไม่มีข้อรองรับ "
-    "เสียหายกว่าการบอกว่าไม่มีข้อเขียนไว้\n\n"
-    "ข้อที่ใกล้เคียงที่สุดเท่าที่คลังมี คือ\n\n{nearest}\n\n"
-    "ถ้าเรื่องนี้มีกฎหมายอื่นกำกับอยู่ เช่น ระเบียบข้าราชการครูหรือกฎหมายเลือกตั้ง "
-    "เรื่องนั้นอยู่นอกคลังนี้ ตรวจสอบกับต้นสังกัดหรือดูตัวบทที่ ksp.or.th/laws ครับ"
-)
 
 SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อมูลเรื่องจรรยาบรรณวิชาชีพทางการศึกษา สำหรับครูและผู้ปกครอง ตอบผ่านแอปแชท LINE
 
@@ -185,6 +171,11 @@ class Answer:
     hits: list[Hit] = field(default_factory=list)
     in_scope: bool = True
     error: str | None = None
+    # what the guards found and what the repair turn did with it. Carried so a
+    # reader of the API can check the mechanism instead of inferring it from a
+    # diff against the previous run, which is how round seven had to be read.
+    faults: list[str] = field(default_factory=list)
+    repair: str = "not attempted"   # accepted | rejected | not attempted
 
     def for_line(self) -> str:
         """Plain-text form, used as a fallback and by callers that want one string."""
@@ -372,21 +363,12 @@ class Fault:
         if self.gap is not None:
             return Answer(text=await phrase_refusal(question, self.gap),
                           hits=hits, in_scope=False, error=self.kind)
-        if self.kind == "thin evidence":
-            # not a dead end: the nearest rules are shown, because "the code does
-            # not say" is only useful next to what it does say
-            nearest = "\n\n".join(f"• {h.citation}\n{h.rec['text'][:220]}"
-                                   for h in hits[:3])
-            return Answer(text=NO_RULE.format(nearest=nearest), hits=hits,
-                          citations=[h.citation for h in hits[:3]],
-                          error=self.kind)
         template = FABRICATED if self.kind == "unsupported citations" else MISCITED
         return Answer(text=template.format(laws=self.note, sections=self.note),
                       hits=hits, in_scope=False, error=self.kind)
 
 
-def inspect(question: str, text: str, hits: list[Hit],
-            bm25_top: float) -> list[Fault]:
+def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     """Everything wrong with a draft, in one pass, so the repair turn sees it all.
 
     Reporting one fault at a time made the writer fix that one and break another,
@@ -422,15 +404,6 @@ def inspect(question: str, text: str, hits: list[Hit],
     for problem in unsupported_claims(text, _support_index()):
         faults.append(Fault(problem, blocks=settings.claim_check_blocks,
                             kind="unsupported claims"))
-
-    # This one blocks, and unusually it blocks into an answer rather than a
-    # refusal. Six rounds of instructions never moved this group, and the repair
-    # note does not move it either -- the writer keeps the verdict and changes
-    # the wording around it. So the answer shape is taken out of its hands: the
-    # nearest rules are shown with a plain statement that none of them covers the
-    # conduct, which is what a teacher needed to know in the first place.
-    if conviction_on_thin_evidence(question, text, bm25_top):
-        faults.append(Fault(THIN, blocks=True, kind="thin evidence"))
 
     return faults
 
@@ -503,8 +476,11 @@ async def answer_question(question: str) -> Answer:
             citations=[h.citation for h in hits],
             hits=hits, error="degenerate answer")
 
-    faults = inspect(question, text, hits, result.max_bm25)
+    faults = inspect(text, hits)
+    found = [f.note for f in faults]
+    repair = "not attempted"
     if faults:
+        repair = "rejected"
         log.info("REPAIRING %s | %r", [f.note for f in faults][:3], question[:70])
         try:
             second = await complete(SYSTEM_PROMPT, user_prompt + REPAIR.format(
@@ -512,18 +488,24 @@ async def answer_question(question: str) -> Answer:
         except LLMUnavailable:
             second = ""
         if second and not looks_degenerate(second):
-            left = inspect(question, second, hits, result.max_bm25)
-            # a repair that trades one fault for another is not a repair; only a
-            # strictly shorter list is accepted, so a bad second try cannot make
-            # the answer worse than the first one was
-            if len(left) < len(faults):
+            left = inspect(second, hits)
+            # A repair has to earn its shorter fault list. Deleting the flagged
+            # citation shortens it too, and round seven caught three answers
+            # doing exactly that -- a provision cited correctly the round before,
+            # replaced by a hedge. So the second draft must keep every rule the
+            # first one cited, on top of having fewer faults.
+            kept = cited_rules(second, _support_index()) >= cited_rules(
+                text, _support_index())
+            if len(left) < len(faults) and kept:
                 log.info("REPAIRED %d -> %d | %r", len(faults), len(left),
                          question[:60])
-                text, faults = second, left
+                text, faults, repair = second, left, "accepted"
         blocking = next((f for f in faults if f.blocks), None)
         if blocking:
             log.warning("BLOCKED %s | %r", blocking.note, question[:80])
-            return await blocking.refuse(question, hits)
+            answer = await blocking.refuse(question, hits)
+            answer.faults, answer.repair = found, repair
+            return answer
 
-    return Answer(text=tidy_for_chat(text),
+    return Answer(text=tidy_for_chat(text), faults=found, repair=repair,
                   citations=[h.citation for h in hits], hits=hits)

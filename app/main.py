@@ -108,6 +108,11 @@ async def chat(req: ChatRequest) -> dict:
         "answer": answer.text,
         "in_scope": answer.in_scope,
         "error": answer.error,
+        # what the guards found on the first draft, and whether the rewrite was
+        # accepted. For reading acceptance runs without diffing against the
+        # previous one.
+        "faults": answer.faults,
+        "repair": answer.repair,
         "sources": [
             {"citation": h.citation, "score": round(h.rrf, 4),
              "dense": round(h.dense_score, 4), "bm25": round(h.bm25_score, 3),

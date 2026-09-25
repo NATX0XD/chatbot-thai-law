@@ -14,8 +14,7 @@ import pytest
 from app.config import settings
 from app.corpus_store import open_corpus
 from app.support import (
-    Corpus, conviction_on_thin_evidence, impossible_citations,
-    unsupported_claims)
+    Corpus, cited_rules, impossible_citations, unsupported_claims)
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -222,47 +221,39 @@ def test_reporting_a_should_as_a_must_is_caught(corpus):
                               corpus) == []
 
 
-VERDICT = "ครูไปหาเสียงช่วยผู้สมัคร ส.ส. ผิดจรรยาบรรณไหม"
+def test_an_ambiguous_sub_item_pointer_is_not_a_wrong_one(corpus):
+    """ข้อ 6 has both (ก)(๖) and (ข)(๖), on opposite sides of the same subject.
 
-
-def test_a_verdict_with_no_rule_about_the_conduct_is_reported():
-    """KSP-040, wrong in the same way for six rounds.
-
-    The regulations say nothing about canvassing; the political restrictions on
-    civil servants are in an act this corpus does not hold. BM25 is the signal
-    -- 8.5 here against 24 to 45 for conduct the rules do describe -- because
-    word overlap with the question is exactly what query expansion exists to
-    make unnecessary.
+    (ก)(๖) is เลือกใช้หลักวิชาที่ถูกต้อง and (ข)(๖) is ใช้หลักวิชาการที่ไม่ถูกต้อง
+    ... เกิดความเสียหาย. Reading only the first block made this checker report a
+    correct prohibition as unsupported, and I passed that on as a real catch
+    until the tester opened the record. A letterless pointer is ambiguous, and
+    ambiguous is not wrong.
     """
-    assert conviction_on_thin_evidence(
-        VERDICT, "การหาเสียงช่วยผู้สมัคร ส.ส. ถือว่าผิดจรรยาบรรณต่อสังคม", 8.5)
+    assert unsupported_claims(
+        "ครูใช้หลักวิชาการที่ไม่ถูกต้องในการปฏิบัติวิชาชีพ ส่งผลให้ศิษย์เกิดความเสียหาย "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 6 (๖))", corpus) == []
 
 
-def test_an_answer_that_says_the_code_is_silent_is_not_a_conviction():
-    assert not conviction_on_thin_evidence(
-        VERDICT, "ข้อบังคับจรรยาบรรณไม่ได้เขียนเรื่องการหาเสียงไว้โดยตรง", 8.5)
+def test_an_instrument_we_failed_to_name_does_not_borrow_its_neighbours(corpus):
+    """"พ.ร.บ.สภาครูฯ" matches no name and carries no year.
 
-
-def test_conduct_the_rules_do_describe_is_left_alone():
-    """The lowest in-domain verdict question measured scores 11.9."""
-    assert not conviction_on_thin_evidence(
-        "ครูด่านักเรียนหน้าชั้นเรียน ผิดจรรยาบรรณไหม",
-        "ถือว่าผิดจรรยาบรรณต่อผู้รับบริการ", 35.9)
-    assert not conviction_on_thin_evidence(
-        "ครูใช้หลักวิชาผิดจนศิษย์เสียหาย เข้าข่ายพฤติกรรมใด",
-        "ถือว่าผิดจรรยาบรรณต่อผู้รับบริการ", 11.9)
-
-
-def test_a_hedge_followed_by_a_verdict_is_still_a_verdict():
-    """The commoner shape, and the one that slipped through first.
-
-    "ตัวบทไม่ได้ระบุชัดเจนว่าห้าม ... แต่ ... ถือว่าผิดจรรยาบรรณ" reads to a
-    teacher as a conviction. Only a disclaimer with the last word counts.
+    The lookup fell back to the regulation named earlier in the sentence and
+    reported มาตรา 52 -- which exists, and was in that case's own sources -- as
+    missing, refusing an answer that had passed the round before. An instrument
+    word between the name we matched and the citation means we do not know whose
+    citation it is, and not knowing is not a fault in the answer.
     """
-    assert conviction_on_thin_evidence(
-        VERDICT,
-        "ตัวบทไม่ได้ระบุชัดเจนว่าห้ามเข้าร่วมกิจกรรมทางการเมืองทุกกรณี "
-        "แต่การกระทำที่ขัดกับการเป็นแบบอย่างที่ดี ถือว่าผิดจรรยาบรรณ", 8.5)
-    assert not conviction_on_thin_evidence(
-        VERDICT,
-        "บางคนมองว่าถือว่าผิดจรรยาบรรณ แต่ข้อบังคับไม่ได้เขียนเรื่องนี้ไว้", 8.5)
+    assert impossible_citations(
+        "ตามข้อบังคับคุรุสภา การพิจารณาการประพฤติผิดจรรยาบรรณ 2568 ข้อ 46 "
+        "และ พ.ร.บ.สภาครูฯ มาตรา 52", corpus) == []
+
+
+def test_the_rules_an_answer_cites_are_counted(corpus):
+    """What stops a repair from passing by deleting the flagged citation."""
+    answer = ("ครูต้องไม่ดูหมิ่นศิษย์ (ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตาม"
+              "จรรยาบรรณ 2550 ข้อ 7) และพึงช่วยเหลือเกื้อกูลกัน "
+              "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
+    assert cited_rules(answer, corpus) == {("ข้อ", "7"), ("ข้อ", "14")}
+    hedged = "ครูควรประพฤติตนให้เหมาะสมตามจรรยาบรรณของวิชาชีพ"
+    assert not cited_rules(hedged, corpus) >= cited_rules(answer, corpus)
