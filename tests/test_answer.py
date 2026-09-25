@@ -396,3 +396,28 @@ def test_an_act_citation_carries_no_profession():
     text, _ = answer_mod.resolve_citations("[1]", [_piece(
         "54", sysid="act-2546", short="พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546")])
     assert "หมวดของ" not in text
+
+
+def test_a_number_the_evidence_does_contain_is_left_where_it_is():
+    """Deleting every hand-typed number was too blunt.
+
+    "อยู่ในข้อ 7 จรรยาบรรณต่อตนเอง" became "อยู่ใน จรรยาบรรณต่อตนเอง" on a
+    question that asked which ข้อ it was, and "ข้อ 9, 10, 11, 12 และ 13" came
+    out as "ได้แก่ , 10, 11, 12 และ 13" because only the first number carried
+    the word ข้อ. What decides is whether the model was shown that rule, not
+    who typed the number.
+    """
+    hits = [_piece("9", sysid="ksp-2556"), _piece("10", sysid="ksp-2556")]
+    text, typed = answer_mod.resolve_citations(
+        "มีห้าข้อ ได้แก่ ข้อ 9, 10 และ ข้อ 99", hits)
+    assert "ข้อ 9, 10" in text
+    assert "ข้อ 99" not in text and typed == ["ข้อ 99"]
+
+
+def test_a_pointer_that_lost_its_brackets_is_not_left_looking_like_a_rule():
+    """"8(ข)(๓)" is a marker the substitution missed, and it reads to a teacher
+    as a rule number."""
+    text, _ = answer_mod.resolve_citations(
+        "ครูต้องไม่ดูหมิ่นศิษย์ 8(ข)(๓)", [_piece("7", chapter=TEACHER)])
+    assert "8(ข)(๓)" not in text
+    assert "ครูต้องไม่ดูหมิ่นศิษย์" in text

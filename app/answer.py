@@ -381,8 +381,12 @@ def _support_index() -> SupportIndex:
 # wants, at a sub-item inside it. Everything else about the citation is filled
 # in from the record.
 MARKER = re.compile(r"\[(\d{1,2})\]((?:\s*\([ก-ฮ๐-๙0-9]{1,3}\))*)")
+THAI_TO_ARABIC = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 # a rule number the model typed itself, which is the thing being taken away
-TYPED_NUMBER = re.compile(r"(?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}")
+TYPED_NUMBER = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3})")
+# "8(ข)(๓)" with the brackets around the index lost -- a pointer that failed to
+# become a citation, and reads to a teacher as a rule number
+BARE_POINTER = re.compile(r"(?<![๐-๙0-9])[๐-๙0-9]{1,2}(?:\s*\([ก-ฮ๐-๙0-9]{1,3}\))+")
 # a whole hand-written citation: "(ข้อบังคับคุรุสภา ... ข้อ 99)". Removing only
 # the number would leave the instrument's name dangling in an empty bracket.
 TYPED_CITATION = re.compile(r"\([^()\[\]]*(?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}[^()]*\)")
@@ -408,9 +412,24 @@ def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
     # that are wrong, while the sentence around them is not. Deleting the number
     # leaves "อยู่ในจรรยาบรรณต่อตนเอง", which is true and still useful; keeping
     # it leaves a false statement a reader cannot check.
-    stray = TYPED_NUMBER.findall(MARKER.sub("", text))
-    text = TYPED_CITATION.sub("", MARKER.sub(lambda m: m.group(0), text))
-    text = TYPED_NUMBER.sub("", text)
+    # A typed number is deleted only when the evidence does not contain it.
+    # Deleting every one of them was too blunt: the answer to "อยู่ในข้อใด"
+    # became "อยู่ใน จรรยาบรรณต่อตนเอง", and a list came out as "ได้แก่ , 10,
+    # 11, 12 และ 13" because only the first number carried the word ข้อ. What
+    # matters is whether the number is one the model was shown, not who typed it.
+    supplied = {(h.rec.get("unit", "มาตรา"), h.rec["section"]) for h in hits}
+
+    def invented(match: re.Match) -> bool:
+        return (match.group(1),
+                match.group(2).translate(THAI_TO_ARABIC)) not in supplied
+
+    stray = [m.group(0) for m in TYPED_NUMBER.finditer(MARKER.sub("", text))
+             if invented(m)]
+    text = TYPED_CITATION.sub(
+        lambda m: "" if any(invented(t) for t in TYPED_NUMBER.finditer(m.group(0)))
+        else m.group(0), text)
+    text = TYPED_NUMBER.sub(lambda m: "" if invented(m) else m.group(0), text)
+    text = BARE_POINTER.sub("", text)
 
     def swap(match: re.Match) -> str:
         index = int(match.group(1)) - 1
