@@ -51,6 +51,14 @@ INDENT = Inches(0.5)           # the thesis indents the first line of a paragrap
 # Body paragraphs take their alignment from the document's own style. Thai
 # Distributed was tried here and taken out on the author's instruction.
 BODY_ALIGN = None
+TABLE_WIDTH = Inches(6.0)      # the same measure the figures use
+TABLE_FONT = Pt(13)            # two points under the body, as the example sets it
+# measured off a 13pt line rather than derived: Thai glyphs carry vowels and
+# tone marks above and below rather than beside, so they are not much wider than
+# Latin, but they are wider
+THAI_CHAR = 0.082
+LATIN_CHAR = 0.062
+CELL_PADDING = 0.14
 
 
 # ------------------------------------------------------------------- helpers
@@ -124,22 +132,56 @@ class Cursor:
         return para
 
     def table(self, header, rows, template=None):
+        """A table whose columns are as wide as their contents need.
+
+        Word's default is to divide the width equally, which in Thai is worse
+        than it sounds: there are no spaces inside a word, so a column that is
+        one character too narrow breaks the word itself -- หน่วยนับ came out as
+        "ห" over "น่วยนับ", and direct as "dir" over "ect". Widths are set from
+        the longest cell in each column, the layout is fixed so Word does not
+        redistribute them, and the text is a couple of points smaller than the
+        body, which is how the tables in the example thesis are set.
+        """
         table = self.doc.add_table(rows=1, cols=len(header))
         table.style = "Table Grid"
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        table.autofit = False
+
         for cell, text in zip(table.rows[0].cells, header):
-            cell.text = ""
-            run = cell.paragraphs[0].add_run(text)
-            run.bold = True
-            clone_format(cell.paragraphs[0], template)
+            self._fill(cell, text, template, bold=True,
+                       align=WD_ALIGN_PARAGRAPH.CENTER)
         for row in rows:
-            cells = table.add_row().cells
-            for cell, text in zip(cells, row):
-                cell.text = ""
-                cell.paragraphs[0].add_run(text)
-                clone_format(cell.paragraphs[0], template)
+            for cell, text in zip(table.add_row().cells, row):
+                self._fill(cell, text, template,
+                           align=None if len(text) > 12 else WD_ALIGN_PARAGRAPH.CENTER)
+
+        for column, width in zip(table.columns,
+                                 _column_widths(header, rows)):
+            for cell in column.cells:
+                cell.width = width
         self.place(table._element)
         return table
+
+    @staticmethod
+    def _fill(cell, text, template, *, bold=False, align=None):
+        cell.text = ""
+        para = cell.paragraphs[0]
+        run = para.add_run(text)
+        run.bold = bold
+        clone_format(para, template)
+        run.font.size = TABLE_FONT
+        for tag in ("w:eastAsia", "w:cs"):
+            if run._element.rPr is not None and run._element.rPr.rFonts is not None:
+                run._element.rPr.rFonts.set(qn(tag), run.font.name or "")
+        _set_size_cs(run, TABLE_FONT)
+        # the body style indents the first line; inside a cell that just eats
+        # the column and pushes the first word onto the next row
+        para.paragraph_format.first_line_indent = Inches(0)
+        para.paragraph_format.left_indent = Inches(0)
+        para.paragraph_format.space_after = Pt(2)
+        para.paragraph_format.space_before = Pt(2)
+        if align is not None:
+            para.alignment = align
 
 
 def make_chapter(doc, title: str, after_title: str):
@@ -154,6 +196,54 @@ def make_chapter(doc, title: str, after_title: str):
     heading = doc.add_paragraph(title, style="Heading 1")
     anchor.addnext(heading._element)
     return heading
+
+
+def _set_size_cs(run, size) -> None:
+    """Thai is a complex script and Word sizes it from w:szCs, not w:sz."""
+    rPr = run._element.get_or_add_rPr()
+    for existing in rPr.findall(qn("w:szCs")):
+        rPr.remove(existing)
+    rPr.append(docx.oxml.parse_xml(
+        f'<w:szCs xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/'
+        f'2006/main" w:val="{int(size.pt * 2)}"/>'))
+
+
+def _column_widths(header, rows):
+    """Share the page between columns so no column is narrower than its widest
+    single word.
+
+    Thai writes without spaces inside a word, so a column one character too
+    narrow does not wrap -- it breaks the word. หน่วยนับ came out as "ห" over
+    "น่วยนับ" and direct as "dir" over "ect". Each column is therefore given the
+    room its longest unbreakable run needs first, and only what is left over is
+    shared out in proportion to how much text each column carries.
+
+    If the minimums alone do not fit the page, they are scaled down together --
+    the table is then too wide for its font, and the answer is a shorter heading
+    rather than a cleverer sum.
+    """
+    columns = list(zip(header, *rows))
+    total_width = TABLE_WIDTH.inches
+    mins, demand = [], []
+    for column in columns:
+        widest = max((max((_width_of(word) for word in str(cell).split()),
+                          default=0.0) for cell in column), default=0.0)
+        mins.append(widest + CELL_PADDING)
+        demand.append(max(_width_of(str(cell)) for cell in column))
+
+    if sum(mins) > total_width:
+        scale = total_width / sum(mins)
+        return [Inches(m * scale) for m in mins]
+
+    spare = total_width - sum(mins)
+    extra = [spare * d / sum(demand) for d in demand]
+    return [Inches(m + e) for m, e in zip(mins, extra)]
+
+
+def _width_of(text: str) -> float:
+    """Inches a string needs at TABLE_FONT. Thai glyphs are the wider ones."""
+    thai = sum(1 for ch in text if "\u0e01" <= ch <= "\u0e5b")
+    return thai * THAI_CHAR + (len(text) - thai) * LATIN_CHAR
 
 
 def chapter_span(doc, title: str):
