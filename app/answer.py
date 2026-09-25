@@ -56,7 +56,7 @@ from app.support import (
     Corpus as SupportIndex, cited_rules, correct_modals, impossible_citations,
     misattributed_citations, modal_mismatches, points_elsewhere,
     right_sub_item, SUB_ITEM, unsupported_claims)
-from app.verify import unsupported_laws
+from app.verify import invented_dates, unsupported_laws
 
 log = logging.getLogger(__name__)
 
@@ -417,7 +417,8 @@ BARE_POINTER = re.compile(r"(?<![๐-๙0-9])[๐-๙0-9]{1,2}(?:\s*\([ก-ฮ�
 TYPED_CITATION = re.compile(r"\([^()\[\]]*(?:ข้อ|มาตรา)\s*[๐-๙0-9]{1,3}[^()]*\)")
 
 
-def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
+def resolve_citations(
+        text: str, hits: list[Hit]) -> tuple[str, list[str], list[str]]:
     """Turn the model's [n] markers into real citations, and report the rest.
 
     Three assessor rounds measured the same thing three times: the answers are
@@ -501,7 +502,11 @@ def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
         return f"({hits[index].citation}{subs}{_whose(rec)})"
 
     text = MARKER.sub(swap, text)
-    return re.sub(r"[ \t]{2,}", " ", text), stray + mispointed
+    # kept apart: they are different faults with different notes, and merging
+    # them made the repair turn read "คำตอบพิมพ์ \u201c… ไม่มีข้อความรองรับประโยค
+    # ที่ชี้มา\u201d เอง" -- the wrong-pointer note wrapped in the typed-number
+    # template, which is not a sentence about anything.
+    return re.sub(r"[ \t]{2,}", " ", text), stray, mispointed
 
 
 SENTENCE_EDGE = re.compile(r"[\n•]|[.!?]\s")
@@ -690,9 +695,15 @@ async def answer_question(question: str) -> Answer:
             citations=[h.citation for h in hits],
             hits=hits, error="degenerate answer")
 
-    text, typed = resolve_citations(text, hits)
+    text, typed, mispointed = resolve_citations(text, hits)
     if typed:
         log.info("TYPED NUMBERS %s | %r", typed[:3], question[:70])
+
+    # A date the model wrote that no rule states. It was given the words of the
+    # rules and nothing else, so there is nowhere else such a date came from.
+    text, dates = invented_dates(text, [h.rec["text"] for h in hits])
+    if dates:
+        log.info("INVENTED DATES %s | %r", dates[:2], question[:70])
 
     # Which of ต้อง and พึง a rule uses is a fact about the corpus, so it is
     # corrected here rather than asked for in the repair turn -- which was told
@@ -725,10 +736,12 @@ async def answer_question(question: str) -> Answer:
             # It did not, and accepted repairs shipped with their pointers
             # unresolved -- "…ต่อจิตใจและอารมณ์ 2(ข)(๓)" reached a reader as a
             # rule number, in an answer the system had recorded as repaired.
-            second, second_typed = resolve_citations(second, hits)
+            second, second_typed, second_mispointed = resolve_citations(second, hits)
+            second, _ = invented_dates(second, [h.rec["text"] for h in hits])
+            second, _ = correct_modals(second, _support_index())
             left = inspect(second, hits)
             left += [Fault(note, blocks=False, kind="typed citation", acts=False)
-                     for note in second_typed]
+                     for note in second_typed + second_mispointed]
             # A repair has to earn its shorter fault list. Deleting the flagged
             # citation shortens it too, and round seven caught three answers
             # doing exactly that -- a provision cited correctly the round before,

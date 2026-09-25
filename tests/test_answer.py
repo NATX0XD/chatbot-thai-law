@@ -365,17 +365,17 @@ def test_a_pointer_becomes_the_citation_of_the_evidence_it_points_at():
     the number beside it is not. The model typed 266 rule numbers across 60
     answers; now it points and the citation is read off the record."""
     hits = [_piece("7", chapter=TEACHER), _piece("12", chapter=HEAD)]
-    text, problems = answer_mod.resolve_citations(
+    text, typed, mispointed = answer_mod.resolve_citations(
         "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ [1](ข)(๓)", hits)
     assert "ข้อ 7(ข)(๓)" in text
-    assert not problems
+    assert not typed and not mispointed
 
 
 def test_the_citation_says_whose_duty_it_is():
     """ข้อบังคับฯ 2550 states the same five duties four times, once per kind of
     practitioner. Quoting one profession's rule for another was the commonest
     fault the assessors found, so the citation names the profession."""
-    text, _ = answer_mod.resolve_citations("[1] และ [2]",
+    text, _, _ = answer_mod.resolve_citations("[1] และ [2]",
                                            [_piece("7", chapter=TEACHER),
                                             _piece("12", chapter=HEAD)])
     assert "หมวดของครู" in text
@@ -383,21 +383,21 @@ def test_the_citation_says_whose_duty_it_is():
 
 
 def test_a_pointer_at_evidence_that_was_never_supplied_disappears():
-    text, _ = answer_mod.resolve_citations("ตามที่กำหนดไว้ [9]",
+    text, _, _ = answer_mod.resolve_citations("ตามที่กำหนดไว้ [9]",
                                            [_piece("7", chapter=TEACHER)])
     assert "[9]" not in text and "9" not in text
 
 
 def test_a_number_the_model_typed_itself_is_reported():
     """The whole point is that it stops doing this, so it has to be visible."""
-    text, typed = answer_mod.resolve_citations(
+    text, typed, _ = answer_mod.resolve_citations(
         "ตามข้อ 99 และ [1]", [_piece("7", chapter=TEACHER)])
     assert typed == ["ข้อ 99"]
 
 
 def test_an_act_citation_carries_no_profession():
     """Only ข้อบังคับฯ 2550 repeats itself by profession."""
-    text, _ = answer_mod.resolve_citations("[1]", [_piece(
+    text, _, _ = answer_mod.resolve_citations("[1]", [_piece(
         "54", sysid="act-2546", short="พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546")])
     assert "หมวดของ" not in text
 
@@ -412,7 +412,7 @@ def test_a_number_the_evidence_does_contain_is_left_where_it_is():
     who typed the number.
     """
     hits = [_piece("9", sysid="ksp-2556"), _piece("10", sysid="ksp-2556")]
-    text, typed = answer_mod.resolve_citations(
+    text, typed, _ = answer_mod.resolve_citations(
         "มีห้าข้อ ได้แก่ ข้อ 9, 10 และ ข้อ 99", hits)
     assert "ข้อ 9, 10" in text
     assert "ข้อ 99" not in text and typed == ["ข้อ 99"]
@@ -421,7 +421,7 @@ def test_a_number_the_evidence_does_contain_is_left_where_it_is():
 def test_a_pointer_that_lost_its_brackets_is_not_left_looking_like_a_rule():
     """"8(ข)(๓)" is a marker the substitution missed, and it reads to a teacher
     as a rule number."""
-    text, _ = answer_mod.resolve_citations(
+    text, _, _ = answer_mod.resolve_citations(
         "ครูต้องไม่ดูหมิ่นศิษย์ 8(ข)(๓)", [_piece("7", chapter=TEACHER)])
     assert "8(ข)(๓)" not in text
     assert "ครูต้องไม่ดูหมิ่นศิษย์" in text
@@ -440,7 +440,7 @@ def test_a_pointer_at_a_rule_that_says_nothing_of_the_kind_is_reported():
                    short="ข้อบังคับคุรุสภา การพิจารณาการประพฤติผิดจรรยาบรรณ 2568",
                    text="เมื่อการสอบสวนแล้วเสร็จ ให้คณะอนุกรรมการสอบสวนทำรายงาน"
                         "การสอบสวนเสนอต่อคณะกรรมการมาตรฐานวิชาชีพ")
-    _, problems = answer_mod.resolve_citations(
+    _, _, problems = answer_mod.resolve_citations(
         "ผู้ประกอบวิชาชีพต้องให้บริการด้วยความจริงใจและเสมอภาค "
         "โดยไม่เรียกรับผลประโยชน์จากการใช้ตำแหน่งหน้าที่โดยมิชอบ [1]", [wrong])
     assert problems and "ข้อ 51" in problems[0]
@@ -501,14 +501,14 @@ def test_a_prose_number_is_checked_against_what_that_rule_says():
                                "ศาสนา ศิลปวัฒนธรรม และสิ่งแวดล้อม")
     vices = _piece("5", text="ครูต้องไม่เกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติด"
                              "จนขาดสติหรือแสดงกิริยาไม่สุภาพ")
-    text, stray = answer_mod.resolve_citations(
+    text, stray, _ = answer_mod.resolve_citations(
         "การเกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติดจนขาดสติอยู่ในข้อ 9",
         [society, vices])
     assert "ข้อ 9" not in text
     assert stray == ["ข้อ 9"]
 
     # and the number that does carry the sentence stays
-    kept, _ = answer_mod.resolve_citations(
+    kept, _, _ = answer_mod.resolve_citations(
         "การเกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติดจนขาดสติอยู่ในข้อ 5",
         [society, vices])
     assert "ข้อ 5" in kept

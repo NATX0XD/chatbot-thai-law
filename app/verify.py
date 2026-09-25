@@ -242,3 +242,42 @@ def _names_the_same_law(name: str, allowed: set[str]) -> bool:  # noqa: D401
         if len(short) >= MIN_CONTAINS and short in long:
             return True
     return False
+
+
+# Thai calendar dates. The model was given the rules' text and nothing else --
+# build_context supplies the citation, the chapter headings and the words of the
+# rule -- so a date it writes either came from that text or from nowhere. Asked
+# which regulation is in force, it answered "มีผลใช้บังคับตั้งแต่วันที่ 1
+# เมษายน พ.ศ. 2568", a date that appears in no record. ข้อ 2 says "วันถัดจาก
+# วันประกาศในราชกิจจานุเบกษา" and the record was published on 30 July.
+MONTHS = ("มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+          "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม")
+CALENDAR_DATE = re.compile(
+    r"[๐-๙0-9]{1,2}\s*(" + "|".join(MONTHS) + r")\s*(?:พ\.?\s*ศ\.?\s*)?([๐-๙0-9]{4})")
+
+
+def _dated(text: str) -> set[tuple[str, str, str]]:
+    """Every (day, month, year) the text states, digits normalised."""
+    plain = text.translate(THAI_DIGITS)
+    return {(m.group(0).split(m.group(1))[0].strip(), m.group(1), m.group(2))
+            for m in CALENDAR_DATE.finditer(plain)}
+
+
+def invented_dates(answer: str, evidence: list[str]) -> tuple[str, list[str]]:
+    """Drop the lines that state a date the rules do not.
+
+    The line goes rather than the date alone: "มีผลใช้บังคับตั้งแต่ เป็นต้นไป"
+    is worse than saying nothing, and a sentence built around a date that does
+    not exist has nothing left in it once the date is gone.
+    """
+    supplied = set().union(*(_dated(text) for text in evidence)) if evidence else set()
+    kept, dropped = [], []
+    for line in answer.split("\n"):
+        invented = _dated(line) - supplied
+        if invented:
+            dropped.append(", ".join(" ".join(d) for d in sorted(invented)))
+            continue
+        kept.append(line)
+    if not any(line.strip() for line in kept):
+        return answer, []
+    return "\n".join(kept), dropped

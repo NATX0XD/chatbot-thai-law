@@ -7,7 +7,7 @@ not exist, while the only context it had been given was an unrelated payments ac
 """
 import pytest
 
-from app.verify import unsupported_laws
+from app.verify import invented_dates, unsupported_laws
 
 # the model pointing back at the act it was handed, rather than naming a new one
 SELF_REFERENCES = [
@@ -152,3 +152,31 @@ def test_a_figure_absent_from_the_sections_is_reported():
                 "ค่าจ้างอัตราสุดท้ายสามสิบวัน"]
     assert unsupported_figures("ได้ค่าชดเชย 30 วัน เมื่อทำงานครบ 120 วัน", sections) == []
     assert unsupported_figures("ได้เงินทดแทนเดือนละ 1,000 บาท", sections) == ["1,000 บาท"]
+
+
+def test_a_date_no_rule_states_takes_its_line_with_it():
+    """Asked which regulation is in force, the answer said "มีผลใช้บังคับตั้งแต่
+    วันที่ 1 เมษายน พ.ศ. 2568". ข้อ 2 says "วันถัดจากวันประกาศในราชกิจจานุเบกษา"
+    and no record carries that date. The model was given the words of the rules
+    and nothing else, so there is nowhere else the date came from."""
+    answer = ("ข้อบังคับคุรุสภา ว่าด้วยการพิจารณาการประพฤติผิดจรรยาบรรณ พ.ศ. 2568 "
+              "คือฉบับที่ใช้อยู่ในปัจจุบัน\n\n"
+              "ข้อบังคับฉบับนี้มีผลใช้บังคับตั้งแต่วันที่ 1 เมษายน พ.ศ. 2568 เป็นต้นไป")
+    kept, dropped = invented_dates(
+        answer, ["ข้อบังคับนี้ให้ใช้บังคับตั้งแต่วันถัดจากวันประกาศในราชกิจจานุเบกษา"])
+    assert dropped == ["1 เมษายน 2568"]
+    assert "1 เมษายน" not in kept
+    assert "คือฉบับที่ใช้อยู่ในปัจจุบัน" in kept
+
+
+def test_a_date_the_rules_do_state_is_kept():
+    """Thai numerals in the rule, Arabic in the answer -- the same date."""
+    answer = "ประกาศใช้เมื่อวันที่ 1 เมษายน พ.ศ. 2568"
+    assert invented_dates(answer, ["ประกาศ ณ วันที่ ๑ เมษายน พ.ศ. ๒๕๖๘"]) == (answer, [])
+
+
+def test_an_answer_that_is_nothing_but_a_bad_date_is_left_alone():
+    """Dropping every line would leave the reader with an empty message, which
+    is worse than a wrong date they can check against the citation beside it."""
+    answer = "มีผลตั้งแต่วันที่ 1 เมษายน พ.ศ. 2568"
+    assert invented_dates(answer, ["ไม่มีวันที่ในข้อนี้"]) == (answer, [])
