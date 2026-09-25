@@ -529,6 +529,57 @@ def points_elsewhere(sentence: str, rule_text: str, corpus: "Corpus") -> bool:
     return bool(keys) and not (keys & set(_content(rule_text)))
 
 
+def right_sub_item(sentence: str, rule_text: str, markers: list[str],
+                   corpus: "Corpus") -> list[str] | None:
+    """Which sub-item of this rule the sentence actually belongs to.
+
+    Returns the pointer unchanged when it is already right, the correct one when
+    exactly one other block carries the sentence, and None when the rule has no
+    block that does -- in which case the safe citation is the rule without a
+    pointer into it.
+
+    All three assessors named this as the largest remaining fault class, and
+    every example is the same shape: the rule is right and the pointer inside it
+    is not. "การเลือกปฏิบัติ" was cited to ข้อ 7(ข)(๑) of ข้อบังคับฯ 2550, which
+    reads "ลงโทษศิษย์อย่างไม่เหมาะสม". The words of the sentence and the words of
+    the block are both in the corpus; nothing had been comparing them.
+    """
+    words = _content(sentence)
+    if len(words) < MIN_CLAIM_WORDS:
+        return markers
+    keys = _rarest(words, corpus)
+    if not keys:
+        return markers
+    if any(keys & set(_content(block))
+           for block in _blocks_for(rule_text, markers) or []):
+        return markers
+
+    letters = [letter for letter in LETTERS if f"({letter})" in rule_text]
+    # deduplicated: (ก) and (ข) both number from (๑), so the raw list repeats
+    # every number once per lettered block and every candidate appeared twice --
+    # which read as a tie and threw away the one correct answer.
+    numbered = list(dict.fromkeys(n for n in SUB_ITEM.findall(rule_text)
+                                  if n not in letters))
+    candidates = [[letter, number] for letter in (letters or [None])
+                  for number in numbered]
+    if not candidates:
+        # the rule has no sub-items to choose between. Whether a pointer into it
+        # means anything is impossible_citations' question, not this one's.
+        return markers
+    # scored, not filtered: a rule states the duty under (ก) and forbids its
+    # opposite under (ข), so one shared word matches both halves. "แตกความ
+    # สามัคคี" matched (ก)(๒) on ความสามัคคี alone and (ข)(๕) on all three of
+    # its distinctive words, and a plain filter called that a tie and gave up.
+    scored = [(len(keys & set(_content(" ".join(
+        _blocks_for(rule_text, [x for x in c if x]) or [])))), c)
+        for c in candidates]
+    best = max(score for score, _ in scored)
+    winners = [c for score, c in scored if score == best]
+    if not best or len(winners) != 1:
+        return None
+    return [x for x in winners[0] if x]
+
+
 def cited_rules(answer: str, corpus: "Corpus") -> set[str]:
     """The rule numbers an answer cites that exist somewhere in the corpus.
 

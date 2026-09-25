@@ -15,7 +15,7 @@ from app.config import settings
 from app.corpus_store import open_corpus
 from app.support import (
     Corpus, cited_rules, impossible_citations, misattributed_citations,
-    correct_modals, modal_mismatches, unsupported_claims)
+    correct_modals, modal_mismatches, right_sub_item, unsupported_claims)
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -310,3 +310,49 @@ def test_a_rule_split_across_records_is_read_as_one(corpus):
         "ครูเรียกร้องผลตอบแทนจากศิษย์หรือผู้รับบริการในงานตามหน้าที่ "
         "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7 (ข)(๗))",
         corpus) == []
+
+
+RULE_7 = "ksp-2550", "ข้อ", "7"
+RULE_8 = "ksp-2550", "ข้อ", "8"
+
+
+def _text(corpus, key):
+    return corpus.by_rule[key]["text"]
+
+
+def test_a_pointer_at_the_wrong_sub_item_is_moved_to_the_right_one(corpus):
+    """All three assessors named this as the largest remaining fault class: the
+    rule is right and the pointer inside it is not. ข้อ 8(ข)(๑) is the rule
+    against withholding information; (ข)(๓) is the one against forming
+    factions."""
+    sentence = ("ครูไม่พึงปิดบังข้อมูลข่าวสารในการปฏิบัติงานจนทำให้เกิด"
+                "ความเสียหายต่องาน")
+    assert right_sub_item(sentence, _text(corpus, RULE_8),
+                          ["ข", "๓"], corpus) == ["ข", "๑"]
+
+
+def test_a_pointer_the_rule_cannot_support_is_dropped(corpus):
+    """"เลือกปฏิบัติ" was cited to ข้อ 7(ข)(๑) of ข้อบังคับฯ 2550, which reads
+    "ลงโทษศิษย์อย่างไม่เหมาะสม". No block of ข้อ 7 carries it -- it is in the
+    chapters for the other three professions -- so the citation keeps the rule
+    and loses the pointer rather than sending a reader to the wrong text."""
+    sentence = ("การปฏิบัติงานโดยมุ่งประโยชน์ส่วนตนและการเลือกปฏิบัติต่อศิษย์"
+                "อย่างไม่เป็นธรรม")
+    assert right_sub_item(sentence, _text(corpus, RULE_7),
+                          ["ข", "๑"], corpus) is None
+
+
+def test_a_correct_pointer_is_left_where_it_is(corpus):
+    sentence = "ครูไม่พึงลงโทษศิษย์อย่างไม่เหมาะสมจนเกิดความเสียหายแก่ร่างกายและจิตใจ"
+    assert right_sub_item(sentence, _text(corpus, RULE_7),
+                          ["ข", "๑"], corpus) == ["ข", "๑"]
+
+
+def test_the_duty_and_its_opposite_are_told_apart_by_weight(corpus):
+    """ข้อ 8 states the duty under (ก) and forbids its opposite under (ข), so
+    ความสามัคคี alone matches both halves. (ข)(๕) matches all three distinctive
+    words; a plain filter called that a tie and gave up."""
+    sentence = ("ครูไม่พึงวิพากษ์วิจารณ์ผู้ร่วมประกอบวิชาชีพในเรื่องที่"
+                "ก่อให้เกิดความเสียหายหรือแตกความสามัคคี")
+    assert right_sub_item(sentence, _text(corpus, RULE_8),
+                          ["ข", "๑"], corpus) == ["ข", "๕"]

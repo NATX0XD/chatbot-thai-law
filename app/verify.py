@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import re
 
+THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
+
 # A title ends where the sentence resumes. Without this the trailing-token window
 # swallows the conjunction and the *next* law with it, so a fabricated citation
 # hides inside a legitimate one:
@@ -158,6 +160,12 @@ def unsupported_laws(answer: str, citations: list[str],
         if COUNCIL_HEAD.match(raw.strip()) and not NAMED.search(raw):
             continue
         raw = _title_only(raw)
+        year_only = YEAR_ONLY.match(raw)
+        if year_only:
+            if year_only.group(1).translate(THAI_DIGITS) in _years(citations):
+                continue
+            bad.append(raw[:year_only.end()].strip())
+            continue
         name = normalise(raw)
         if len(name) < 4:
             continue
@@ -190,6 +198,32 @@ UNIT_NUMBER = re.compile(r"(?:ข้อ|มาตรา)\s*[๐-๙0-9]")
 def _title_only(raw: str) -> str:
     cut = UNIT_NUMBER.search(raw)
     return raw[:cut.start()].strip() if cut else raw.strip()
+
+
+# "ข้อบังคับคุรุสภา 2556" names a regulation by its year and says nothing about
+# its subject, so everything after the year is the sentence. Matching it as a
+# title turned "ข้อบังคับคุรุสภา 2556 ยืนยันว่าผู้บริหารสถานศึกษาเป็นผู้ประกอบ
+# วิชาชีพทางการศึกษา" into a law name and refused the answer to "จรรยาบรรณนี้
+# ใช้กับผู้อำนวยการโรงเรียนด้วยไหม", which the corpus answers plainly.
+#
+# The year is still checked, against the years of the instruments the corpus
+# holds. A regulation of a year the Council never issued one in is invented;
+# one of a year it did is the model naming a real document tersely.
+# The head has to be the bare noun: a span that carries a subject after ว่าด้วย
+# is a title and is checked as one. "ข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ พ.ศ.
+# 2556" is a real regulation this corpus does not hold, and a looser head let it
+# through on the strength of its year.
+YEAR_ONLY = re.compile(r"^(?:ข้อบังคับ(?:คุรุสภา|ฯ)|ประกาศคณะกรรมการคุรุสภา)[ \t]+"
+                       r"(?:พ\.?[ \t]*ศ\.?[ \t]*)?([๐-๙0-9]{4})")
+
+
+YEAR_IN_NAME = re.compile(r"(?<![0-9])(2[0-9]{3})(?![0-9])")
+
+
+def _years(citations: list[str]) -> set[str]:
+    """Every year an instrument in the corpus carries in its name."""
+    return {y for c in citations
+            for y in YEAR_IN_NAME.findall(c.translate(THAI_DIGITS))}
 
 
 def _names_the_same_law(name: str, allowed: set[str]) -> bool:  # noqa: D401
