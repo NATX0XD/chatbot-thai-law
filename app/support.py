@@ -195,15 +195,22 @@ class Corpus:
     """The corpus, indexed the three ways this module needs to read it."""
 
     def __init__(self, records: list[dict]):
+        # A long rule is stored as several records and read here as one. Ten of
+        # the 334 records are continuations, and dropping them cost an answer:
+        # ข้อ 7 ของข้อบังคับฯ 2550 carries (ข)(๗) เรียกร้องผลตอบแทนจากศิษย์ in
+        # its second piece, so the sub-item check reported the rule as having no
+        # (๗) and refused an answer that had quoted it correctly.
         self.by_rule: dict[tuple[str, str, str], dict] = {}
         self.by_unit_number: dict[tuple[str, str], list[dict]] = {}
-        for rec in records:
-            if rec.get("part", 0):
-                continue  # a later chunk of a long rule; part 0 opens it
+        for rec in sorted(records, key=lambda r: r.get("part", 0)):
             key = (rec["sysid"], rec.get("unit", "มาตรา"), rec["section"])
-            self.by_rule[key] = rec
+            if key in self.by_rule:
+                self.by_rule[key]["text"] += "\n\n" + rec["text"]
+                continue
+            whole = dict(rec)
+            self.by_rule[key] = whole
             self.by_unit_number.setdefault(
-                (rec.get("unit", "มาตรา"), rec["section"]), []).append(rec)
+                (rec.get("unit", "มาตรา"), rec["section"]), []).append(whole)
 
         self.all_citations = [
             f"{rec.get('short') or rec['act']} {rec.get('unit', 'มาตรา')} {rec['section']}"
@@ -321,27 +328,49 @@ def impossible_citations(answer: str, corpus: Corpus) -> list[str]:
     A rule number the instrument does not have, a unit word that instrument
     never uses, a sub-item outside the block it names -- each is a fact about
     the corpus, checked against the corpus, with no judgement about meaning.
-    That is why this one blocks and `unsupported_claims` does not.
+    That is why this one blocks and the other two do not.
     """
-    return _walk(answer, corpus, lexical=False)
+    return [note for kind, note in _walk(answer, corpus) if kind == "structural"]
+
+
+def modal_mismatches(answer: str, corpus: Corpus) -> list[str]:
+    """Answers that turn a พึง into a ต้อง, or the other way round.
+
+    Kept apart from unsupported_claims because the two were measured together
+    and came out opposite. Over rounds seven and eight the overlap check fired
+    28 times, 9 of them right, and exactly one of those nine -- a พึง reported
+    as ต้อง -- turned into a corrected answer. This one compares two words
+    against the text that contains them; there is no judgement about meaning in
+    it, and it is the only part of the lexical pass allowed to cost a call.
+    """
+    return [note for kind, note in _walk(answer, corpus) if kind == "modal"]
 
 
 def unsupported_claims(answer: str, corpus: Corpus) -> list[str]:
-    """Citations whose text does not carry the sentence they are attached to."""
-    return _walk(answer, corpus, lexical=True)
+    """Citations whose text does not carry the sentence they are attached to.
+
+    LOGGED, NOT ACTED ON. Round eight measured it at 39% of in-domain answers
+    with 68% of those wrong, and the two harms it did are on record: a repair
+    that deleted a correctly cited provision, and one that appended a line
+    saying ข้อ 8 does not exist to an answer whose first sentence cited ข้อ 8
+    correctly. A check that is wrong two times in three cannot be allowed to
+    rewrite an answer. It stays because its false positives are the data for
+    fixing it -- see ingest/flag_rate.py.
+    """
+    return [note for kind, note in _walk(answer, corpus) if kind == "overlap"]
 
 
-def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
+def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
     # keep the offsets usable: the pointer is blanked, not deleted, so the
     # claim window and the instrument lookup still measure the real distances
     answer = NESTED.sub(lambda m: m.group(1) + m.group(2)
                         + " " * (len(m.group(0)) - len(m.group(1)) - len(m.group(2))),
                         answer)
-    problems: list[str] = []
+    problems: list[tuple[str, str]] = []
 
-    def report(message: str) -> None:
-        if message not in problems:
-            problems.append(message)
+    def report(kind: str, message: str) -> None:
+        if (kind, message) not in problems:
+            problems.append((kind, message))
 
     spans = [m.span() for m in CITATION.finditer(answer)]
     for match in CITATION.finditer(answer):
@@ -352,15 +381,13 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
         if sysid:
             rec = corpus.by_rule.get((sysid, unit, number))
             if rec is None:
-                if not lexical:
-                    report(f"{unit} {number} ไม่มีอยู่ในเอกสารที่อ้าง")
+                report("structural", f"{unit} {number} ไม่มีอยู่ในเอกสารที่อ้าง")
                 continue
             candidates = [rec]
         else:
             candidates = corpus.by_unit_number.get((unit, number), [])
             if not candidates:
-                if not lexical:
-                    report(f"ไม่มี{unit} {number} ในตัวบทฉบับใดเลย")
+                report("structural", f"ไม่มี{unit} {number} ในตัวบทฉบับใดเลย")
                 continue
 
         markers = SUB_ITEM.findall(subs)
@@ -372,9 +399,7 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
             # not the corpus's -- and this check blocks the whole answer, so it
             # is worth the second read to make the claim one about the corpus
             # rather than about which instrument the sentence seemed to mean.
-            report(f"{unit} {number} ไม่มีอนุข้อ ({missing})")
-        if not lexical:
-            continue
+            report("structural", f"{unit} {number} ไม่มีอนุข้อ ({missing})")
 
         others = [s for s in spans if s != match.span()]
         windows = [w for w in _windows(answer, match.span(), others)
@@ -403,7 +428,8 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
                 break
         if not supported:
             where = "อนุข้อที่ชี้" if markers else f"{unit} {number}"
-            report(f"{where} ไม่มีข้อความรองรับประโยคที่อ้างถึง ({unit} {number})")
+            report("overlap",
+                   f"{where} ไม่มีข้อความรองรับประโยคที่อ้างถึง ({unit} {number})")
 
     return problems
 
@@ -437,7 +463,7 @@ def _modal(claim: str, texts: list[str], unit: str, number: str, report) -> None
     rules = " ".join(texts)
     if SHOULD.search(rules) and not MUST.search(rules) \
             and MUST.search(claim) and not SHOULD.search(claim):
-        report(f"{unit} {number} ใช้คำว่า “พึง” แต่คำตอบเขียนว่า “ต้อง”")
+        report("modal", f"{unit} {number} ใช้คำว่า “พึง” แต่คำตอบเขียนว่า “ต้อง”")
     elif MUST.search(rules) and not SHOULD.search(rules) \
             and SHOULD.search(claim) and not MUST.search(claim):
-        report(f"{unit} {number} ใช้คำว่า “ต้อง” แต่คำตอบเขียนว่า “พึง”")
+        report("modal", f"{unit} {number} ใช้คำว่า “ต้อง” แต่คำตอบเขียนว่า “พึง”")

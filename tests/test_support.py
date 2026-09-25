@@ -14,7 +14,8 @@ import pytest
 from app.config import settings
 from app.corpus_store import open_corpus
 from app.support import (
-    Corpus, cited_rules, impossible_citations, unsupported_claims)
+    Corpus, cited_rules, impossible_citations, modal_mismatches,
+    unsupported_claims)
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -215,10 +216,13 @@ def test_reporting_a_should_as_a_must_is_caught(corpus):
     must = ("ผู้ประกอบวิชาชีพทางการศึกษาต้องช่วยเหลือเกื้อกูลซึ่งกันและกัน"
             "อย่างสร้างสรรค์ ยึดมั่นในระบบคุณธรรม "
             "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
-    problems = unsupported_claims(must, corpus)
+    problems = modal_mismatches(must, corpus)
     assert problems and "พึง" in problems[0]
-    assert unsupported_claims(must.replace("ต้องช่วยเหลือ", "พึงช่วยเหลือ"),
-                              corpus) == []
+    assert modal_mismatches(must.replace("ต้องช่วยเหลือ", "พึงช่วยเหลือ"),
+                            corpus) == []
+    # and it is reported on its own, so it can be acted on while the overlap
+    # check beside it is only logged
+    assert unsupported_claims(must, corpus) == []
 
 
 def test_an_ambiguous_sub_item_pointer_is_not_a_wrong_one(corpus):
@@ -257,3 +261,17 @@ def test_the_rules_an_answer_cites_are_counted(corpus):
     assert cited_rules(answer, corpus) == {("ข้อ", "7"), ("ข้อ", "14")}
     hedged = "ครูควรประพฤติตนให้เหมาะสมตามจรรยาบรรณของวิชาชีพ"
     assert not cited_rules(hedged, corpus) >= cited_rules(answer, corpus)
+
+
+def test_a_rule_split_across_records_is_read_as_one(corpus):
+    """ข้อ 7 ของข้อบังคับฯ 2550 is stored in two pieces.
+
+    (ข)(๗) เรียกร้องผลตอบแทนจากศิษย์ sits alone in the second one, so reading
+    only the first reported the rule as having no (๗) and refused an answer that
+    had quoted it word for word. Ten of the corpus's 334 records are
+    continuations like this.
+    """
+    assert impossible_citations(
+        "ครูเรียกร้องผลตอบแทนจากศิษย์หรือผู้รับบริการในงานตามหน้าที่ "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7 (ข)(๗))",
+        corpus) == []

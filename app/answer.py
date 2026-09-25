@@ -53,7 +53,7 @@ from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
-    Corpus as SupportIndex, cited_rules, impossible_citations,
+    Corpus as SupportIndex, cited_rules, impossible_citations, modal_mismatches,
     unsupported_claims)
 from app.verify import unsupported_laws
 
@@ -100,6 +100,10 @@ REPAIR = """
 ถ้าข้อที่อ้างไม่ได้เขียนเรื่องที่ถามไว้ ให้บอกตามตรงว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้
 แล้วอธิบายว่าข้อที่ใกล้เคียงที่สุดพูดถึงอะไร ดีกว่าอ้างข้อที่ไม่ตรง
 ตอบเฉพาะคำตอบใหม่ ไม่ต้องอธิบายว่าแก้อะไร"""
+
+CORRECTION = ("⚠️ ขอแก้ถ้อยคำให้ตรงตัวบท — {notes} "
+              "สองคำนี้มีผลต่างกัน “ต้อง” คือข้อบังคับที่ฝ่าฝืนแล้วมีโทษ "
+              "ส่วน “พึง” คือข้อพึงปฏิบัติ")
 
 SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อมูลเรื่องจรรยาบรรณวิชาชีพทางการศึกษา สำหรับครูและผู้ปกครอง ตอบผ่านแอปแชท LINE
 
@@ -358,6 +362,9 @@ class Fault:
     blocks: bool
     kind: str = ""
     gap: object = None
+    # whether this fault is allowed to spend a model call. False means it is
+    # recorded for the log and the API and nothing else.
+    acts: bool = True
 
     async def refuse(self, question: str, hits: list[Hit]) -> Answer:
         if self.gap is not None:
@@ -401,9 +408,20 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     for problem in impossible_citations(text, _support_index()):
         faults.append(Fault(problem, blocks=True, kind="unsupported sections"))
 
+    # พึง against ต้อง is two words compared against the text that contains
+    # them. It is the only part of the lexical pass that earned a call: over
+    # rounds seven and eight it is the one true catch that turned into a
+    # corrected answer.
+    for problem in modal_mismatches(text, _support_index()):
+        faults.append(Fault(problem, blocks=False, kind="modal mismatch"))
+
+    # The overlap check is measured at 39% of answers with 68% of those wrong,
+    # and it has two harms on record. It is recorded and not acted on: the log
+    # is how its window gets fixed, and settings.claim_check_blocks is the
+    # switch that would let it decide anything, still off.
     for problem in unsupported_claims(text, _support_index()):
         faults.append(Fault(problem, blocks=settings.claim_check_blocks,
-                            kind="unsupported claims"))
+                            kind="unsupported claims", acts=False))
 
     return faults
 
@@ -479,7 +497,7 @@ async def answer_question(question: str) -> Answer:
     faults = inspect(text, hits)
     found = [f.note for f in faults]
     repair = "not attempted"
-    if faults:
+    if any(f.acts for f in faults):
         repair = "rejected"
         log.info("REPAIRING %s | %r", [f.note for f in faults][:3], question[:70])
         try:
@@ -496,9 +514,10 @@ async def answer_question(question: str) -> Answer:
             # first one cited, on top of having fewer faults.
             kept = cited_rules(second, _support_index()) >= cited_rules(
                 text, _support_index())
-            if len(left) < len(faults) and kept:
-                log.info("REPAIRED %d -> %d | %r", len(faults), len(left),
-                         question[:60])
+            acting = sum(f.acts for f in faults)
+            if sum(f.acts for f in left) < acting and kept:
+                log.info("REPAIRED %d -> %d | %r", acting,
+                         sum(f.acts for f in left), question[:60])
                 text, faults, repair = second, left, "accepted"
         blocking = next((f for f in faults if f.blocks), None)
         if blocking:
@@ -506,6 +525,15 @@ async def answer_question(question: str) -> Answer:
             answer = await blocking.refuse(question, hits)
             answer.faults, answer.repair = found, repair
             return answer
+
+        # Round eight: 13 of 14 rejected repairs shipped with the fault intact
+        # and error null -- the tester's words were that the guard knew the
+        # answer was wrong and went quiet. A พึง reported as ต้อง is two words
+        # checked against the text that contains them, so when one survives the
+        # rewrite the correction is stated rather than swallowed.
+        left_over = [f.note for f in faults if f.kind == "modal mismatch"]
+        if left_over:
+            text += "\n\n" + CORRECTION.format(notes=" · ".join(left_over))
 
     return Answer(text=tidy_for_chat(text), faults=found, repair=repair,
                   citations=[h.citation for h in hits], hits=hits)
