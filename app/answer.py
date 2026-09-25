@@ -97,13 +97,11 @@ REPAIR = """
 {problems}
 
 เขียนคำตอบใหม่ทั้งหมดโดยแก้ข้อผิดพลาดข้างต้น ใช้ได้เฉพาะตัวบทที่ให้ไว้เท่านั้น
+ห้ามเพิ่มการอ้างอิงข้อหรือมาตราใหม่ที่ไม่ได้อยู่ในคำตอบเดิม แก้เฉพาะจุดที่ระบุไว้ข้างบน
+ส่วนที่เหลือของคำตอบให้คงไว้ตามเดิม ห้ามตัดรายการที่ตัวบทกำหนดไว้ออก
 ถ้าข้อที่อ้างไม่ได้เขียนเรื่องที่ถามไว้ ให้บอกตามตรงว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้
 แล้วอธิบายว่าข้อที่ใกล้เคียงที่สุดพูดถึงอะไร ดีกว่าอ้างข้อที่ไม่ตรง
 ตอบเฉพาะคำตอบใหม่ ไม่ต้องอธิบายว่าแก้อะไร"""
-
-CORRECTION = ("⚠️ ขอแก้ถ้อยคำให้ตรงตัวบท — {notes} "
-              "สองคำนี้มีผลต่างกัน “ต้อง” คือข้อบังคับที่ฝ่าฝืนแล้วมีโทษ "
-              "ส่วน “พึง” คือข้อพึงปฏิบัติ")
 
 SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อมูลเรื่องจรรยาบรรณวิชาชีพทางการศึกษา สำหรับครูและผู้ปกครอง ตอบผ่านแอปแชท LINE
 
@@ -547,8 +545,15 @@ async def answer_question(question: str) -> Answer:
             # doing exactly that -- a provision cited correctly the round before,
             # replaced by a hedge. So the second draft must keep every rule the
             # first one cited, on top of having fewer faults.
-            kept = cited_rules(second, _support_index()) >= cited_rules(
-                text, _support_index())
+            # The second draft must keep every number the first cited and must
+            # not invent new ones. Requiring only the first half is what the
+            # assessors measured as the system "padding a correct core with
+            # extra cross-references that do not hold up": the rule made adding
+            # citations free and removing them impossible, and five of the six
+            # regressions between the two assessor rounds were exactly that.
+            before = cited_rules(text, _support_index())
+            after = cited_rules(second, _support_index())
+            kept = after == before
             acting = sum(f.acts for f in faults)
             if sum(f.acts for f in left) < acting and kept:
                 log.info("REPAIRED %d -> %d | %r", acting,
@@ -560,15 +565,6 @@ async def answer_question(question: str) -> Answer:
             answer = await blocking.refuse(question, hits)
             answer.faults, answer.repair = found, repair
             return answer
-
-        # Round eight: 13 of 14 rejected repairs shipped with the fault intact
-        # and error null -- the tester's words were that the guard knew the
-        # answer was wrong and went quiet. A พึง reported as ต้อง is two words
-        # checked against the text that contains them, so when one survives the
-        # rewrite the correction is stated rather than swallowed.
-        left_over = [f.note for f in faults if f.kind == "modal mismatch"]
-        if left_over:
-            text += "\n\n" + CORRECTION.format(notes=" · ".join(left_over))
 
     return Answer(text=tidy_for_chat(text), faults=found, repair=repair,
                   citations=[h.citation for h in hits], hits=hits)

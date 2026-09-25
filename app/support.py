@@ -95,7 +95,10 @@ MIN_CLAIM_WORDS = 6
 # "ต้อง" is an obligation whose breach is punishable; "พึง" is one that is not.
 # The corpus is careful about which it uses and the writer is not.
 MUST = re.compile(r"ต้อง(?!การ)")
-SHOULD = re.compile(r"พึง")
+# "พฤติกรรมที่ไม่พึงประสงค์" is a heading in ข้อบังคับฯ 2550, not an obligation.
+# Matching the พึง inside it told a user "ข้อ 7 ใช้คำว่า ต้อง แต่คำตอบเขียนว่า
+# พึง" about an answer that never wrote พึง -- a false statement, shipped.
+SHOULD = re.compile(r"พึง(?!ประสงค์)")
 COMMON_SHARE = 1 / 6
 # how many of the claim's rarest words have to be looked for in the cited rule
 KEY_WORDS = 3
