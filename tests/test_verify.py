@@ -57,6 +57,16 @@ def test_a_fake_law_hiding_behind_a_real_one_is_caught():
     assert flagged == ["ประมวลกฎหมายแพ่งและพาณิชย์"]
 
 
+def test_prose_after_a_rule_number_is_not_part_of_the_title():
+    """The answer to "อบายมุขอยู่ในข้อใด" was refused for naming a law that does
+    not exist. The law it named was ข้อ 7 ของข้อบังคับฯ 2556, which does: the
+    span ran past the rule number and took the verb phrase with it, so what got
+    compared against the corpus was "กล่าวถึงการมีวินัยในตนเองและพัฒนาตนเอง"."""
+    answer = ("ข้อบังคับคุรุสภา 2556 ข้อ 7 กล่าวถึงการมีวินัยในตนเองและพัฒนาตนเอง")
+    context = ["ข้อบังคับคุรุสภา ว่าด้วยจรรยาบรรณของวิชาชีพ พ.ศ. 2556 ข้อ 7"]
+    assert unsupported_laws(answer, context) == []
+
+
 def test_no_context_means_no_verdict():
     """With nothing retrieved there is nothing to check against; other guards
     handle that path, and flagging everything here would fire on refusal text."""

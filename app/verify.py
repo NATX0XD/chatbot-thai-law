@@ -157,6 +157,7 @@ def unsupported_laws(answer: str, citations: list[str],
     for raw in LAW_MENTION.findall(answer):
         if COUNCIL_HEAD.match(raw.strip()) and not NAMED.search(raw):
             continue
+        raw = _title_only(raw)
         name = normalise(raw)
         if len(name) < 4:
             continue
@@ -176,6 +177,19 @@ def unsupported_laws(answer: str, citations: list[str],
 # inside a long title is a coincidence waiting to happen, so those must match
 # exactly instead.
 MIN_CONTAINS = 6
+
+# A title stops at its own rule number; whatever follows is the sentence, not
+# the name. Without this cut "ข้อบังคับคุรุสภา 2556 ข้อ 7 กล่าวถึงการมีวินัย
+# ในตนเองและพัฒนาตนเอง" was read as one law name, normalised to the verb phrase
+# at the end of it, matched nothing in the corpus, and the answer to "อบายมุข
+# อยู่ในข้อใด" was refused as citing a law that does not exist -- about ข้อ 7
+# ของข้อบังคับฯ 2556, which does.
+UNIT_NUMBER = re.compile(r"(?:ข้อ|มาตรา)\s*[๐-๙0-9]")
+
+
+def _title_only(raw: str) -> str:
+    cut = UNIT_NUMBER.search(raw)
+    return raw[:cut.start()].strip() if cut else raw.strip()
 
 
 def _names_the_same_law(name: str, allowed: set[str]) -> bool:  # noqa: D401
