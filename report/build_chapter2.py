@@ -48,6 +48,11 @@ MARKDOWN4 = os.path.join(HERE, "บทที่4-ผลการดำเนิ�
 
 FIGURE_WIDTH = Inches(6.0)     # fits the KMUTNB margins with room to spare
 INDENT = Inches(0.5)           # the thesis indents the first line of a paragraph
+# Thai Distributed. Ordinary justification stretches the spaces between words,
+# and Thai does not put spaces between words -- so it stretches only at phrase
+# breaks and leaves ragged gaps. This one distributes across the characters,
+# which is what Word's Thai Distributed button does and what the thesis uses.
+BODY_ALIGN = WD_ALIGN_PARAGRAPH.THAI_JUSTIFY
 
 
 # ------------------------------------------------------------------- helpers
@@ -184,8 +189,29 @@ def write_docx() -> None:
     write_chapter(doc, template, "ทฤษฎีที่เกี่ยวข้อง", CHAPTER)
 
     append_references(doc)
+    thai_distribute(doc)
     doc.save(TARGET)
     print("wrote", TARGET)
+
+
+def thai_distribute(doc) -> None:
+    """Set Thai Distributed on every body paragraph, including the ones already
+    in the thesis, so the whole book sets the same way.
+
+    Left alone: headings, figure and table captions, and anything short enough
+    to be a label rather than a paragraph -- distributing a three-word line
+    stretches it across the full measure, which looks like a mistake.
+    """
+    changed = 0
+    for para in doc.paragraphs:
+        if para.style.name != "Normal" or len(para.text.strip()) < 80:
+            continue
+        if para.alignment == WD_ALIGN_PARAGRAPH.CENTER:
+            continue
+        if para.alignment != BODY_ALIGN:
+            para.alignment = BODY_ALIGN
+            changed += 1
+    print(f"  Thai Distributed applied to {changed} more paragraphs")
 
 
 def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
@@ -198,7 +224,7 @@ def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
 
     for kind, payload in blocks:
         if kind == "intro":
-            cur.paragraph(payload, template, indent=INDENT)
+            cur.paragraph(payload, template, indent=INDENT, align=BODY_ALIGN)
         elif kind == "toc":
             for line in payload:
                 cur.paragraph(line, template, indent=INDENT)
@@ -208,9 +234,9 @@ def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
             para = cur.paragraph(payload, template, indent=INDENT)
             para.runs[0].bold = True
         elif kind == "p":
-            cur.paragraph(payload, template, indent=INDENT)
+            cur.paragraph(payload, template, indent=INDENT, align=BODY_ALIGN)
         elif kind == "bullet":
-            para = cur.paragraph(payload, template)
+            para = cur.paragraph(payload, template, align=BODY_ALIGN)
             para.paragraph_format.left_indent = INDENT
             para.paragraph_format.first_line_indent = Inches(-0.25)
             para.runs[0].text = "•  " + para.runs[0].text
@@ -227,7 +253,7 @@ def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
             cur.table(header, rows, template)
             cur.paragraph("", template)
         elif kind == "note":
-            cur.paragraph(payload, template, indent=INDENT,
+            cur.paragraph(payload, template, indent=INDENT, align=BODY_ALIGN,
                           colour=grey, size=Pt(12))
         else:
             raise ValueError(f"unknown block: {kind}")
@@ -256,8 +282,9 @@ def append_references(doc) -> None:
 
     cur = Cursor(doc, last._element)
     for number, text in REFERENCES:
-        para = cur.paragraph(f"[{number}]  {text}",
-                             template, style=template.style if template else None)
+        para = cur.paragraph(f"[{number}]  {text}", template,
+                             style=template.style if template else None,
+                             align=BODY_ALIGN)
         para.paragraph_format.left_indent = Inches(0.4)
         para.paragraph_format.first_line_indent = Inches(-0.4)
     print(f"  appended references [{REFERENCES[0][0]}]–[{REFERENCES[-1][0]}]")
