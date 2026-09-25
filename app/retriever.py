@@ -43,6 +43,19 @@ SECTION_Q_RE = re.compile(r"(?:มาตรา|ข้อ)\s*(\d+(?:/\d+)?)")
 SUPERSEDED_PENALTY = 0.6
 THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
+# A question that writes "ว่าด้วย" is naming an instrument, not describing a
+# topic. "ข้อบังคับคุรุสภาว่าด้วยการพิจารณาการประพฤติผิดจรรยาบรรณฉบับใดที่ใช้
+# อยู่ในปัจจุบัน" retrieved the first two rules of ข้อบังคับฯ ว่าด้วยการอุทธรณ์
+# คำวินิจฉัย -- a different regulation, in force, and the newest thing in the
+# corpus -- and the answer named it. Only the formal word triggers this: a
+# question that merely contains จรรยาบรรณของวิชาชีพ is asking about the subject
+# and should still see every regulation that writes about it.
+NAMES_AN_INSTRUMENT = "ว่าด้วย"
+# how much of the subject has to appear in the question. Long enough that
+# การพิจารณาการประพฤติผิด… and การอุทธรณ์คำวินิจฉัย… cannot both match.
+SUBJECT_PREFIX = 18
+OFF_SUBJECT_PENALTY = 0.5
+
 
 @dataclass
 class Hit:
@@ -113,6 +126,7 @@ class Retriever:
 
     def __init__(self, load_dense: bool = True):
         self.corpus = open_corpus(settings.corpus_path)
+        self._subjects: list[str] | None = None
 
         # the compact index is the serving form and the pickle is the build
         # artefact it is derived from; prefer it when present, since loading the
@@ -174,6 +188,32 @@ class Retriever:
         order = [int(i) for i in top[np.argsort(-scores[top])] if scores[i] > 0]
         return order, {i: float(scores[i]) for i in order}
 
+    @staticmethod
+    def _subject(act_full: str) -> str:
+        """What a Council regulation is about: the words after ว่าด้วย, with the
+        edition and year taken off. Empty for anything that is not one."""
+        _, marker, rest = act_full.partition("ว่าด้วย")
+        if not marker:
+            return ""
+        for cut in (" (ฉบับ", " พ.ศ."):
+            rest = rest.split(cut)[0]
+        return rest.strip()
+
+    def _named_instrument(self, question: str) -> str:
+        """The one regulation this question names, or "" if it names none.
+
+        Two matches mean the prefix was too short to tell them apart, and the
+        safe reading of an ambiguous question is that it named nothing.
+        """
+        if NAMES_AN_INSTRUMENT not in question:
+            return ""
+        if self._subjects is None:
+            self._subjects = sorted({self._subject(rec.get("act_full", ""))
+                                     for rec in self.corpus} - {""})
+        matched = [s for s in self._subjects
+                   if s[:SUBJECT_PREFIX] in question]
+        return matched[0] if len(matched) == 1 else ""
+
     def search(self, query: str, top_k: Optional[int] = None) -> SearchResult:
         top_k = top_k or settings.top_k_final
         # Normalise digits once, for every path. Doing it only before tokenising
@@ -213,6 +253,16 @@ class Retriever:
         for idx in list(fused):
             if self.corpus[idx].get("superseded_by"):
                 fused[idx] *= SUPERSEDED_PENALTY
+
+        # …and the same shape of nudge for a question that names which
+        # regulation it is asking about. Only one instrument may match, or the
+        # question was not specific enough to act on.
+        named = self._named_instrument(asked)
+        if named:
+            for idx in list(fused):
+                subject = self._subject(self.corpus[idx].get("act_full", ""))
+                if subject and subject != named:
+                    fused[idx] *= OFF_SUBJECT_PENALTY
 
         d_rank = {int(idx): r for r, idx in enumerate(dense)}
         b_rank = {int(idx): r for r, idx in enumerate(sparse)}

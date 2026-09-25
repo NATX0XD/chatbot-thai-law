@@ -245,3 +245,21 @@ def test_the_score_gate_alone_would_not_be_enough(retriever):
     assert slipped, ("every missing-law probe now scores below the gate; "
                      "if this holds for a wider set, the coverage rules could be "
                      "reconsidered")
+
+
+def test_a_question_that_names_a_regulation_gets_that_regulation(retriever):
+    """Asked which regulation on ethics *proceedings* is in force, the system
+    retrieved the first two rules of the regulation on ethics *appeals* -- a
+    different instrument, also in force, and the newest thing in the corpus --
+    and the answer named it. The question says ว่าด้วย and then the subject."""
+    question = ("ข้อบังคับคุรุสภาว่าด้วยการพิจารณาการประพฤติผิดจรรยาบรรณ"
+                "ฉบับใดที่ใช้อยู่ในปัจจุบัน")
+    acts = {h.rec["act_full"] for h in retriever.search(question).hits}
+    assert not any("การอุทธรณ์" in a for a in acts), acts
+
+
+def test_naming_a_subject_without_ว่าด้วย_changes_nothing(retriever):
+    """The nudge is for a question naming an instrument, not one about a topic.
+    Half the corpus writes about จรรยาบรรณของวิชาชีพ and a question using those
+    words has to keep seeing all of it."""
+    assert retriever._named_instrument("จรรยาบรรณของวิชาชีพมีกี่ด้าน") == ""
