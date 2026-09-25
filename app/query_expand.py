@@ -78,15 +78,35 @@ GLOSSARY: tuple[tuple[str, ...], ...] = (
     # --- penalties: nobody types the five outcomes, everybody types "โทษ" ---
     # not a bare "โทษ": "ลงโทษนักเรียน" contains it, and the penalties the
     # Council can impose are not what that question is about
-    (r"มีโทษ|บทลงโทษ|โทษอะไร|โดนอะไร|ผลที่ตามมา|ซีเรียสแค่ไหน|ลงโทษครู",
+    # "โทษ...มีกี่สถาน" matched none of these triggers, so มาตรา 54 -- the one
+    # section that lists the penalties -- was never retrieved, and five rounds
+    # of assessors marked the answer wrong for the same reason each time.
+    (r"มีโทษ|บทลงโทษ|โทษอะไร|โทษของ|กี่สถาน|สถานใด|โดนอะไร|ผลที่ตามมา"
+     r"|ซีเรียสแค่ไหน|ลงโทษครู",
      "ยกข้อกล่าวหา ตักเตือน ภาคทัณฑ์ พักใช้ใบอนุญาต เพิกถอนใบอนุญาต "
-     "คณะกรรมการมาตรฐานวิชาชีพวินิจฉัยชี้ขาด"),
+     "คณะกรรมการมาตรฐานวิชาชีพมีอำนาจวินิจฉัยชี้ขาด"),
     (r"ยึดใบอนุญาต|โดนพักใบ|ถูกถอนใบ|เสียใบอนุญาต|หมดสิทธิ์สอน",
      "พักใช้ใบอนุญาต เพิกถอนใบอนุญาต"),
+    # "ระยะเวลาสูงสุดของการพักใช้ใบอนุญาต" is the one labelled question retrieval
+    # has never answered: the cap lives in มาตรา 54 (๔), whose words are these.
+    (r"สูงสุด|นานสุด|ไม่เกินกี่|กี่ปี|นานเท่าไหร่|นานแค่ไหน",
+     "มีกำหนดเวลาตามที่เห็นสมควร ไม่เกินห้าปี", r"พักใช้|ใบอนุญาต|เพิกถอน"),
 
     # --- procedure ---
     (r"ร้องเรียน|แจ้งเรื่อง|เอาผิดครู|ฟ้องครู|แจ้งคุรุสภา|ร้องทุกข์",
      "การกล่าวหา การกล่าวโทษ ยื่นเรื่องต่อคุรุสภา หนังสือกล่าวหา"),
+    # What a complaint must contain is ข้อ 8; ข้อ 37, about what the sub-committee
+    # weighs afterwards, outranked it and the answer was written half out of the
+    # wrong rule. These are ข้อ 8's own words.
+    (r"รายการใด|ต้องมีอะไร|ต้องใส่อะไร|ต้องระบุ|เขียนอย่างไร|เขียนยังไง",
+     "ทำเป็นหนังสือ ใช้ถ้อยคำสุภาพ สาระสำคัญ ชื่อและที่อยู่ของผู้กล่าวหา "
+     "ลายมือชื่อผู้กล่าวหา", r"กล่าวหา|กล่าวโทษ|ร้องเรียน|คำร้อง"),
+    # Not a glossary entry for "ฉบับใดที่ใช้อยู่ในปัจจุบัน": tried, and appending
+    # the title and commencement clauses put ข้อ 1 and ข้อ 2 of every regulation
+    # in the corpus at the top and pushed the repeal clause -- the rule that
+    # actually answers it -- out. Labelled recall fell 98% to 94%. Retrieval
+    # already returns ข้อ 3 first; the failure on that question is on the answer
+    # side, not here.
     (r"สอบสวน|สืบสวน|ตั้งกรรมการ|ตั้งคณะกรรมการ",
      "คณะอนุกรรมการสืบสวน คณะอนุกรรมการสอบสวน"),
     (r"ไม่ร้ายแรง|เล็กน้อย|ไม่หนัก",

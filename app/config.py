@@ -107,8 +107,17 @@ class Settings(BaseSettings):
     # was frequently irrelevant against a corpus of 733 acts. With the weights
     # above, giving it one seat is worth a point of doc@3 and a point of rule@6.
     # A superseded rule can never take a reserved seat; see app/retriever.py.
+    #
+    # Raised from 1 to 3 for the teacher-ethics corpus, where the dense encoder
+    # has a blind spot BM25 does not. ข้อบังคับฯ 2550 writes each duty out four
+    # times, once per profession, so four chunks differ only in their opening
+    # noun and embed almost identically; for "อบายมุขหรือเสพสิ่งเสพติดอยู่ในข้อใด"
+    # BM25 ranked all four 1-4 and dense ranked none of them inside its top 30,
+    # so one reserved seat admitted the rule for ผู้บริหารการศึกษา and left the
+    # rule for ครู out of the evidence entirely. Recall on the 50 labelled
+    # questions is 98.0% at every value from 1 to 4 -- it costs nothing there.
     guarantee_top: int = 2
-    guarantee_bm25: int = 1
+    guarantee_bm25: int = 3
     # The in-scope gate reads the raw cosine, not the fused RRF score -- RRF depends
     # on rank alone, so an off-topic question and a perfect match get the same value.
     #
