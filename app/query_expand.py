@@ -101,6 +101,13 @@ GLOSSARY: tuple[tuple[str, ...], ...] = (
     (r"รายการใด|ต้องมีอะไร|ต้องใส่อะไร|ต้องระบุ|เขียนอย่างไร|เขียนยังไง",
      "ทำเป็นหนังสือ ใช้ถ้อยคำสุภาพ สาระสำคัญ ชื่อและที่อยู่ของผู้กล่าวหา "
      "ลายมือชื่อผู้กล่าวหา", r"กล่าวหา|กล่าวโทษ|ร้องเรียน|คำร้อง"),
+    # "ตอนนี้ใช้กฎฉบับไหนตัดสินเรื่องจรรยาบรรณครู" retrieved the five duties and
+    # not one rule of the regulation that governs the proceeding. The trigger is
+    # deliberately narrow -- it must name a ฉบับ or a กฎ, not merely say ปัจจุบัน
+    # -- because the broad version cost four points of labelled recall.
+    (r"ใช้กฎฉบับ|ฉบับไหนตัดสิน|กฎฉบับใด|ข้อบังคับฉบับใด|ข้อบังคับฉบับไหน",
+     "ให้ยกเลิก การพิจารณาการประพฤติผิดจรรยาบรรณของวิชาชีพ"),
+
     # Not a glossary entry for "ฉบับใดที่ใช้อยู่ในปัจจุบัน": tried, and appending
     # the title and commencement clauses put ข้อ 1 and ข้อ 2 of every regulation
     # in the corpus at the top and pushed the repeal clause -- the rule that
