@@ -70,6 +70,10 @@ HEIGHTS = {
     "fig-2-5-hybrid": 790,
     "fig-2-6-expand": 510,
     "fig-2-7-stack": 640,
+    "fig-3-1-framework": 400,
+    "fig-3-2-pipeline": 700,
+    "fig-3-3-guards": 640,
+    "fig-3-4-evalloop": 620,
 }
 
 # ---------------------------------------------------------------- 2-1 ladder
@@ -328,6 +332,102 @@ def render(name: str, body: str) -> None:
         capture_output=True, check=True)
     os.remove(page)
     print("wrote", name + ".png")
+
+
+# ------------------------------------------------------ บทที่ 3, the method
+
+FIGURES["fig-3-1-framework"] = """
+<div class="col" style="width:1080px">
+  <div class="row">
+    <div class="box accent grow center" style="padding:18px"><b>3.1 &nbsp;Collection Data</b>
+      <span>รวบรวมและตรึงรุ่นเอกสาร 10 ฉบับ &middot; ถอดข้อความ &middot; แยกเป็นรายข้อ &middot; ติดป้ายจรรยาบรรณ 5 ด้าน &middot; ตรวจความสมบูรณ์ &middot; สร้างดัชนี</span></div>
+    <div class="arrow h">&#10142;</div>
+    <div class="box accent grow center" style="padding:18px"><b>3.2 &nbsp;Development</b>
+      <span>ค้นคืนแบบผสม &middot; ขยายคำถาม &middot; ออกแบบพรอมต์ &middot; ชั้นตรวจสอบคำตอบ &middot; ส่วนติดต่อผู้ใช้ &middot; นำขึ้นให้บริการ</span></div>
+    <div class="arrow h">&#10142;</div>
+    <div class="box accent grow center" style="padding:18px"><b>3.3 &nbsp;Evaluation</b>
+      <span>ประเมินชุดข้อมูล &middot; ประเมินการค้นคืน &middot; ประเมินคุณภาพคำตอบโดยผู้ประเมินอิสระ</span></div>
+  </div>
+  <div class="row">
+    <div class="box soft grow center"><span>ผลที่ได้คือแฟ้มคลังข้อมูลและดัชนีที่ตรวจสอบย้อนกลับได้</span></div>
+    <div style="width:30px"></div>
+    <div class="box soft grow center"><span>ผลที่ได้คือระบบที่ตอบพร้อมการอ้างอิง</span></div>
+    <div style="width:30px"></div>
+    <div class="box soft grow center"><span>ผลที่ได้คือตัวเลขความถูกต้องและรายการข้อบกพร่อง</span></div>
+  </div>
+  <div class="arrow">&#8593;&nbsp;&nbsp;ไม่ผ่านเกณฑ์ &rarr; กลับไปแก้ที่ 3.1 หรือ 3.2 แล้ววนประเมินใหม่&nbsp;&nbsp;&#8593;</div>
+  <div class="lbl">เกณฑ์เป็นตัวตั้ง ไม่ใช่ตัวตาม &mdash; เมื่อไม่ผ่านให้แก้ระบบ ไม่ใช่ลดเกณฑ์</div>
+</div>
+"""
+
+FIGURES["fig-3-2-pipeline"] = """
+<div class="col" style="width:1080px">
+  <div class="box accent"><b>1. ดาวน์โหลดและตรึงรุ่น &nbsp;<span class="mono" style="font-weight:400">scripts/fetch_ksp.sh</span></b>
+    <span>เทียบ sha256 ของทุกไฟล์กับค่าที่บันทึกไว้ ถ้าไม่ตรงแปลว่าผู้เผยแพร่เปลี่ยนเอกสาร ต้องตรวจก่อนอัปเดตค่า เพราะเลขข้ออาจเลื่อนตามไปด้วย</span></div>
+  <div class="arrow">&#8595;</div>
+  <div class="box"><b>2. ถอดข้อความ &nbsp;<span class="mono" style="font-weight:400">ingest/thai_pdf_text.py</span></b>
+    <span>ลำดับขั้น 4 ระดับ ผ่านด่านตรวจคุณภาพ 7 ด่าน (ดูภาพที่ 2-1) ผลของระดับ OCR บันทึกไว้ใน data/ocr/ เพื่อให้ประมวลผลซ้ำได้ผลเดิม</span></div>
+  <div class="arrow">&#8595;</div>
+  <div class="box"><b>3. แยกเป็นรายข้อและติดป้าย &nbsp;<span class="mono" style="font-weight:400">ingest/extract_ksp.py</span></b>
+    <span>ตัดตามหัว "ข้อ"/"มาตรา" เก็บหมวดและส่วนที่สังกัด ติดป้ายจรรยาบรรณ 5 ด้าน และบันทึกว่าฉบับใดถูกยกเลิกโดยฉบับใด &rarr; corpus_ksp.jsonl</span></div>
+  <div class="arrow">&#8595;</div>
+  <div class="box warn"><b>4. ตรวจความสมบูรณ์ &nbsp;<span class="mono" style="font-weight:400">ingest/audit_ksp.py</span></b>
+    <span>6 ด้าน ไม่ผ่านด้านใดให้กลับไปแก้ขั้นที่ 2 หรือ 3 &mdash; แยกจากการทดสอบโปรแกรมตามปกติ เพราะถามคนละคำถาม</span></div>
+  <div class="arrow">&#8595;</div>
+  <div class="box ok"><b>5. สร้างดัชนี &nbsp;<span class="mono" style="font-weight:400">ingest/build_index.py</span></b>
+    <span>BGE-M3 &rarr; vectors.npy (334&times;1,024) &middot; ตัดคำ newmm &rarr; bm25_compact.npz &middot; ใช้เวลาราว 18 นาที ทำบนเครื่องพัฒนา ไม่ทำบนเครื่องแม่ข่าย</span></div>
+</div>
+"""
+
+FIGURES["fig-3-3-guards"] = """
+<div class="col" style="width:1080px">
+  <div class="box accent center"><b>ร่างคำตอบจากแบบจำลองภาษา</b></div>
+  <div class="arrow">&#8595;</div>
+  <div class="row">
+    <div class="box grow"><b>ตรวจเนื้อหานอกคลัง</b><span class="mono">app/coverage.py</span>
+      <span>คำตอบพูดถึงกฎหมายที่ระบบไม่มี</span></div>
+    <div class="box grow"><b>ตรวจชื่อกฎที่อ้าง</b><span class="mono">app/verify.py</span>
+      <span>ชื่อเอกสารมีอยู่ในคลังหรือไม่</span></div>
+    <div class="box grow"><b>ตรวจเลขข้อที่อ้าง</b><span class="mono">app/support.py</span>
+      <span>เลขข้อ หน่วยนับ และอนุข้อมีจริงหรือไม่</span></div>
+  </div>
+  <div class="arrow">&#8595;</div>
+  <div class="box warn center"><b>พบข้อผิดพลาด &rarr; ส่งกลับให้เขียนใหม่หนึ่งรอบ พร้อมระบุว่าผิดตรงไหน</b>
+    <span>รับคำตอบใหม่ต่อเมื่อข้อผิดพลาดลดลง <b style="display:inline;font-weight:600">และ</b> ไม่ได้ลบข้อที่เคยอ้างถูกทิ้ง</span></div>
+  <div class="arrow">&#8595;</div>
+  <div class="row">
+    <div class="box ok grow center"><b>แก้ได้ &rarr; ส่งคำตอบใหม่</b></div>
+    <div class="box warn grow center"><b>แก้ไม่ได้ &rarr; ไม่ส่งคำตอบ บอกเหตุผล</b></div>
+  </div>
+  <div class="lbl">ชั้นที่ตัดสินใจได้มีเฉพาะชั้นที่เทียบกับตัวบทโดยตรง ส่วนชั้นที่ต้องตีความความหมายบันทึกไว้เฉย ๆ</div>
+</div>
+"""
+
+FIGURES["fig-3-4-evalloop"] = """
+<div class="col" style="width:1080px">
+  <div class="row">
+    <div class="col grow">
+      <div class="box accent"><b>ก. เขียนเกณฑ์ก่อนแก้ระบบ</b>
+        <span>61 เคสเขียนจากไฟล์ PDF ต้นฉบับ <b style="display:inline;font-weight:600">ก่อน</b> แตะโค้ดของแอป เพื่อให้เกณฑ์มาจากสิ่งที่กฎหมายเขียนไว้ ไม่ใช่จากสิ่งที่ระบบทำได้</span></div>
+      <div class="arrow">&#8595;</div>
+      <div class="box"><b>ข. ผู้ประเมินอิสระยิงคำถามและตัดสิน</b>
+        <span>ได้รับเอกสารเกณฑ์ ไฟล์ PDF และวิธียิง API เท่านั้น &mdash; ไม่ได้รับซอร์สโค้ด และไม่มีสิทธิ์แก้ไฟล์ใด ๆ ตัดสินทีละเคสเป็น PASS / PARTIAL / FAIL พร้อมยกข้อความจากคำตอบจริง</span></div>
+      <div class="arrow">&#8595;</div>
+      <div class="box"><b>ค. แยกสาเหตุของทุกเคสที่ไม่ผ่าน</b>
+        <span>(ก) ระบบ &middot; (ข) ตัวเขียนคำตอบ &middot; (ค) เคสทดสอบเขียนผิด &mdash; เพื่อให้รู้ว่าต้องแก้ที่ใด</span></div>
+      <div class="arrow">&#8595;</div>
+      <div class="box warn"><b>ง. แก้ระบบแล้ววนใหม่</b>
+        <span>ไม่ลดเกณฑ์ และรายงานผลตามจริงแม้ยังไม่ผ่าน</span></div>
+    </div>
+    <div style="width:320px;padding-left:18px;display:flex;flex-direction:column;justify-content:center">
+      <div class="box soft"><b>เกณฑ์ผ่านทั้งสามข้อ</b>
+        <span>ในโดเมน PASS &ge; 45 จาก 50 &middot; นอกโดเมนปฏิเสธถูกทั้ง 10 &middot; ไม่มีเคสใดอ้างเลขข้อที่ไม่มีอยู่จริงแม้เคสเดียว</span></div>
+      <div class="box ok" style="margin-top:14px"><b>เหตุที่ผู้ประเมินเป็นคนละตัวกับผู้พัฒนา</b>
+        <span>ผู้พัฒนารู้ว่าระบบตอบอะไรได้ จึงมีแนวโน้มเขียนคำถามที่ระบบตอบได้ การแยกบทบาทตัดอคตินี้ออก</span></div>
+    </div>
+  </div>
+</div>
+"""
 
 
 def screenshot_app(question: str, port: int = 8077) -> None:

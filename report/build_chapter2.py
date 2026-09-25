@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Write บทที่ 2 into the thesis document, and dump the same text as Markdown.
+"""Write บทที่ 2 and บทที่ 3 into the thesis document, and dump both as Markdown.
 
     .venv/bin/python -m report.build_chapter2
 
 Reads  ~/Downloads/Chatbot เล่ม.docx
-Writes ~/Downloads/Chatbot เล่ม (บทที่ 2).docx   <- a copy, never the original
+Writes ~/Downloads/Chatbot เล่ม (บทที่ 2-3).docx   <- a copy, never the original
        report/บทที่2-ทฤษฎีที่เกี่ยวข้อง.md
+       report/บทที่3-ขั้นตอนและวิธีการดำเนินการวิจัย.md
 
 The original is left alone on purpose: this replaces a whole chapter, and an
 overwrite of the only copy is not something to find out about afterwards. Open
@@ -34,12 +35,14 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from report.chapter2_content import CHAPTER, REFERENCES
+from report.chapter3_content import CHAPTER as CHAPTER3
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIGURES = os.path.join(HERE, "figures")
 SOURCE = os.path.expanduser("~/Downloads/Chatbot เล่ม.docx")
-TARGET = os.path.expanduser("~/Downloads/Chatbot เล่ม (บทที่ 2).docx")
+TARGET = os.path.expanduser("~/Downloads/Chatbot เล่ม (บทที่ 2-3).docx")
 MARKDOWN = os.path.join(HERE, "บทที่2-ทฤษฎีที่เกี่ยวข้อง.md")
+MARKDOWN3 = os.path.join(HERE, "บทที่3-ขั้นตอนและวิธีการดำเนินการวิจัย.md")
 
 FIGURE_WIDTH = Inches(6.0)     # fits the KMUTNB margins with room to spare
 INDENT = Inches(0.5)           # the thesis indents the first line of a paragraph
@@ -134,13 +137,18 @@ class Cursor:
         return table
 
 
-def chapter_span(doc):
-    """(heading, elements after it that belong to the old chapter 2)."""
+def chapter_span(doc, title: str):
+    """(heading, the elements after it that belong to that chapter).
+
+    Chapter 3 ends at the template's own leftover headings rather than at a
+    Heading 1, so the search stops at anything that is not body text.
+    """
     paragraphs = doc.paragraphs
     start = next(i for i, p in enumerate(paragraphs)
-                 if p.style.name == "Heading 1" and "ทฤษฎีที่เกี่ยวข้อง" in p.text)
+                 if p.style.name == "Heading 1" and title in p.text)
     end = next((i for i in range(start + 1, len(paragraphs))
-                if paragraphs[i].style.name == "Heading 1"), len(paragraphs))
+                if paragraphs[i].style.name.startswith("Heading")
+                and paragraphs[i].style.name != "Heading 2"), len(paragraphs))
     return paragraphs[start], paragraphs[start + 1:end]
 
 
@@ -151,14 +159,24 @@ def write_docx() -> None:
     doc = docx.Document(TARGET)
     template = body_style(doc)
 
-    heading, old = chapter_span(doc)
+    # chapter 3 first: replacing chapter 2 shifts every paragraph index after it
+    write_chapter(doc, template, "ดําเนินการวิจัย", CHAPTER3)
+    write_chapter(doc, template, "ทฤษฎีที่เกี่ยวข้อง", CHAPTER)
+
+    append_references(doc)
+    doc.save(TARGET)
+    print("wrote", TARGET)
+
+
+def write_chapter(doc, template, title: str, blocks: list[tuple]) -> None:
+    heading, old = chapter_span(doc, title)
     for para in old:
         para._element.getparent().remove(para._element)
 
     cur = Cursor(doc, heading._element)
     grey = RGBColor(0x88, 0x88, 0x88)
 
-    for kind, payload in CHAPTER:
+    for kind, payload in blocks:
         if kind == "intro":
             cur.paragraph(payload, template, indent=INDENT)
         elif kind == "toc":
@@ -193,10 +211,7 @@ def write_docx() -> None:
                           colour=grey, size=Pt(12))
         else:
             raise ValueError(f"unknown block: {kind}")
-
-    append_references(doc)
-    doc.save(TARGET)
-    print("wrote", TARGET)
+    print(f"  {title}: {len(blocks)} blocks")
 
 
 def append_references(doc) -> None:
@@ -230,9 +245,10 @@ def append_references(doc) -> None:
 
 # ------------------------------------------------------------------ markdown
 
-def write_markdown() -> None:
-    out = ["# บทที่ 2", "# ทฤษฎีที่เกี่ยวข้อง", ""]
-    for kind, payload in CHAPTER:
+def write_markdown(blocks: list[tuple], title: str, path: str,
+                   references=None) -> None:
+    out = [f"# {title}", ""]
+    for kind, payload in blocks:
         if kind == "intro":
             out += [payload, ""]
         elif kind == "toc":
@@ -257,13 +273,15 @@ def write_markdown() -> None:
             out += ["|" + "|".join([":--"] * len(header)) + "|"]
             out += ["| " + " | ".join(r) + " |" for r in rows]
             out += [""]
-    out += ["", "## เอกสารอ้างอิงที่เพิ่ม", ""]
-    out += [f"[{n}]  {t}\n" for n, t in REFERENCES]
-    with open(MARKDOWN, "w", encoding="utf-8") as fh:
+    if references:
+        out += ["", "## เอกสารอ้างอิงที่เพิ่ม", ""]
+        out += [f"[{n}]  {t}\n" for n, t in references]
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(out))
-    print("wrote", MARKDOWN)
+    print("wrote", path)
 
 
 if __name__ == "__main__":
     write_docx()
-    write_markdown()
+    write_markdown(CHAPTER, "บทที่ 2 ทฤษฎีที่เกี่ยวข้อง", MARKDOWN, REFERENCES)
+    write_markdown(CHAPTER3, "บทที่ 3 ขั้นตอนและวิธีการดำเนินการวิจัย", MARKDOWN3)
