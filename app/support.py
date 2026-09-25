@@ -282,8 +282,8 @@ def _content(text: str) -> list[str]:
             if len(w) >= 3 and any("ก" <= c <= "ฮ" for c in w)]
 
 
-def _windows(answer: str, span: tuple[int, int],
-             others: list[tuple[int, int]]) -> list[str]:
+def _window_spans(answer: str, span: tuple[int, int],
+                  others: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """The sentences a citation could be attached to: the one in front of it and
     the one behind it.
 
@@ -314,7 +314,7 @@ def _windows(answer: str, span: tuple[int, int],
     right = min([e for e in edges if e >= close_at], default=len(answer))
     right = min([right] + [a for a, _ in others if a >= close_at])
 
-    return [answer[left:open_at], answer[close_at:right]]
+    return [(left, open_at), (close_at, right)]
 
 
 def _brackets(answer: str, span: tuple[int, int]) -> tuple[int, int]:
@@ -335,7 +335,7 @@ def impossible_citations(answer: str, corpus: Corpus) -> list[str]:
     the corpus, checked against the corpus, with no judgement about meaning.
     That is why this one blocks and the other two do not.
     """
-    return [note for kind, note in _walk(answer, corpus) if kind == "structural"]
+    return [note for kind, note, _ in _walk(answer, corpus) if kind == "structural"]
 
 
 def misattributed_citations(answer: str, corpus: Corpus) -> list[str]:
@@ -348,7 +348,7 @@ def misattributed_citations(answer: str, corpus: Corpus) -> list[str]:
     reported as missing because the name nearest them belonged to a different
     instrument.
     """
-    return [note for kind, note in _walk(answer, corpus) if kind == "attribution"]
+    return [note for kind, note, _ in _walk(answer, corpus) if kind == "attribution"]
 
 
 def modal_mismatches(answer: str, corpus: Corpus) -> list[str]:
@@ -361,7 +361,47 @@ def modal_mismatches(answer: str, corpus: Corpus) -> list[str]:
     against the text that contains them; there is no judgement about meaning in
     it, and it is the only part of the lexical pass allowed to cost a call.
     """
-    return [note for kind, note in _walk(answer, corpus) if kind == "modal"]
+    return [note for kind, note, _ in _walk(answer, corpus) if kind == "modal"]
+
+
+# "ต้องไม่กระทำ" corrected word for word becomes "พึงไม่กระทำ", which is not
+# Thai. The negative form moves the modal in front of the negation, so the four
+# substitutions are written out rather than derived.
+TO_SHOULD = ((re.compile(r"ต้องไม่"), "ไม่พึง"), (MUST, "พึง"))
+TO_MUST = ((re.compile(r"ไม่พึง(?!ประสงค์)"), "ต้องไม่"), (SHOULD, "ต้อง"))
+SAYS_SHOULD = "ใช้คำว่า “พึง”"
+
+
+def correct_modals(answer: str, corpus: Corpus) -> tuple[str, list[str]]:
+    """Put ต้อง and พึง back the way the rule wrote them.
+
+    The check below has found this every round since it was written, the repair
+    turn has been told about it every round, and the answer has shipped with the
+    wrong word every round anyway -- eleven times across rounds four and five,
+    on four distinct rules. Asking the writer to fix two words it chose on
+    purpose does not work, and it costs a call to find that out.
+
+    So it is not asked. Which word the rule uses is a fact about the corpus and
+    the substitution is mechanical, which makes this the same move as assembling
+    the citations here instead of letting the model type them.
+
+    Rewrites only inside the claim the citation is attached to. A modal
+    elsewhere in the answer belongs to a different rule and is not this
+    citation's to correct.
+    """
+    fixed, notes = answer, []
+    # right to left, so an earlier span's offsets are not moved by a later edit
+    edits = sorted(((at, note) for kind, note, at in _walk(answer, corpus)
+                    if kind == "modal" and at is not None),
+                   key=lambda e: -e[0][0])
+    for (lo, hi), note in edits:
+        claim = fixed[lo:hi]
+        for pattern, word in (TO_SHOULD if SAYS_SHOULD in note else TO_MUST):
+            claim = pattern.sub(word, claim)
+        if claim != fixed[lo:hi]:
+            fixed = fixed[:lo] + claim + fixed[hi:]
+            notes.append(note)
+    return fixed, notes
 
 
 def unsupported_claims(answer: str, corpus: Corpus) -> list[str]:
@@ -375,20 +415,24 @@ def unsupported_claims(answer: str, corpus: Corpus) -> list[str]:
     rewrite an answer. It stays because its false positives are the data for
     fixing it -- see ingest/flag_rate.py.
     """
-    return [note for kind, note in _walk(answer, corpus) if kind == "overlap"]
+    return [note for kind, note, _ in _walk(answer, corpus) if kind == "overlap"]
 
 
-def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
+def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str, tuple[int, int] | None]]:
     # keep the offsets usable: the pointer is blanked, not deleted, so the
     # claim window and the instrument lookup still measure the real distances
     answer = NESTED.sub(lambda m: m.group(1) + m.group(2)
                         + " " * (len(m.group(0)) - len(m.group(1)) - len(m.group(2))),
                         answer)
-    problems: list[tuple[str, str]] = []
+    problems: list[tuple[str, str, tuple[int, int] | None]] = []
 
-    def report(kind: str, message: str) -> None:
-        if (kind, message) not in problems:
-            problems.append((kind, message))
+    def report(kind: str, message: str, at: tuple[int, int] | None = None) -> None:
+        # `at` is the span of the claim the problem is about, in the original
+        # answer -- the pointer above is blanked rather than deleted so the
+        # offsets still line up. Only the modal check uses it, because it is the
+        # only one whose repair is a known substitution rather than a rewrite.
+        if not any(k == kind and m == message for k, m, _ in problems):
+            problems.append((kind, message, at))
 
     spans = [m.span() for m in CITATION.finditer(answer)]
     for match in CITATION.finditer(answer):
@@ -432,8 +476,8 @@ def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
             report("structural", f"{unit} {number} ไม่มีอนุข้อ ({missing})")
 
         others = [s for s in spans if s != match.span()]
-        windows = [w for w in _windows(answer, match.span(), others)
-                   if len(_content(w)) >= MIN_CLAIM_WORDS]
+        windows = [(lo, hi) for lo, hi in _window_spans(answer, match.span(), others)
+                   if len(_content(answer[lo:hi])) >= MIN_CLAIM_WORDS]
         if not windows:
             continue
 
@@ -445,7 +489,8 @@ def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
             if markers else [rec["text"] for rec in candidates]
 
         supported = False
-        for window in windows:
+        for lo, hi in windows:
+            window = answer[lo:hi]
             # The rarest words the claim uses, not any word it uses. Sharing ครู
             # or วิชาชีพ with a rule proves nothing -- almost every rule has them
             # -- and a check that accepts that evidence never fires.
@@ -454,7 +499,7 @@ def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
             keys = _rarest(_content(window), corpus)
             if not keys or any(keys & set(_content(text)) for text in texts):
                 supported = True
-                _modal(window, texts, unit, number, report)
+                _modal(window, texts, unit, number, report, (lo, hi))
                 break
         if not supported:
             where = "อนุข้อที่ชี้" if markers else f"{unit} {number}"
@@ -508,7 +553,8 @@ def cited_rules(answer: str, corpus: "Corpus") -> set[str]:
     return found
 
 
-def _modal(claim: str, texts: list[str], unit: str, number: str, report) -> None:
+def _modal(claim: str, texts: list[str], unit: str, number: str, report,
+           at: tuple[int, int] | None = None) -> None:
     """"พึง" and "ต้อง" are not the same obligation.
 
     ข้อ 14 says ผู้ประกอบวิชาชีพ *พึง* ช่วยเหลือเกื้อกูลซึ่งกันและกัน -- a duty
@@ -519,7 +565,7 @@ def _modal(claim: str, texts: list[str], unit: str, number: str, report) -> None
     rules = " ".join(texts)
     if SHOULD.search(rules) and not MUST.search(rules) \
             and MUST.search(claim) and not SHOULD.search(claim):
-        report("modal", f"{unit} {number} ใช้คำว่า “พึง” แต่คำตอบเขียนว่า “ต้อง”")
+        report("modal", f"{unit} {number} ใช้คำว่า “พึง” แต่คำตอบเขียนว่า “ต้อง”", at)
     elif MUST.search(rules) and not SHOULD.search(rules) \
             and SHOULD.search(claim) and not MUST.search(claim):
-        report("modal", f"{unit} {number} ใช้คำว่า “ต้อง” แต่คำตอบเขียนว่า “พึง”")
+        report("modal", f"{unit} {number} ใช้คำว่า “ต้อง” แต่คำตอบเขียนว่า “พึง”", at)

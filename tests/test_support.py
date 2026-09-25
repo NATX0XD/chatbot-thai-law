@@ -15,7 +15,7 @@ from app.config import settings
 from app.corpus_store import open_corpus
 from app.support import (
     Corpus, cited_rules, impossible_citations, misattributed_citations,
-    modal_mismatches, unsupported_claims)
+    correct_modals, modal_mismatches, unsupported_claims)
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -228,6 +228,34 @@ def test_reporting_a_should_as_a_must_is_caught(corpus):
     # and it is reported on its own, so it can be acted on while the overlap
     # check beside it is only logged
     assert unsupported_claims(must, corpus) == []
+
+
+def test_the_modal_is_put_back_rather_than_reported(corpus):
+    """The repair turn was told about this every round and shipped the wrong
+    word anyway, eleven times across two rounds. Which word the rule uses is a
+    fact about the corpus, so it is substituted rather than asked for."""
+    must = ("ผู้ประกอบวิชาชีพทางการศึกษาต้องช่วยเหลือเกื้อกูลซึ่งกันและกัน"
+            "อย่างสร้างสรรค์ ยึดมั่นในระบบคุณธรรม "
+            "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
+    fixed, notes = correct_modals(must, corpus)
+    assert notes and "พึงช่วยเหลือ" in fixed
+    assert modal_mismatches(fixed, corpus) == []
+
+
+def test_a_negative_moves_the_modal_in_front_of_it(corpus):
+    """Word for word, "ต้องไม่" becomes "พึงไม่", which is not Thai."""
+    must = ("ผู้ประกอบวิชาชีพต้องไม่ละเลยการช่วยเหลือเกื้อกูลซึ่งกันและกัน"
+            "อย่างสร้างสรรค์ ยึดมั่นในระบบคุณธรรม สร้างความสามัคคีในหมู่คณะ "
+            "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
+    fixed, _ = correct_modals(must, corpus)
+    assert "ไม่พึงละเลย" in fixed and "พึงไม่" not in fixed
+
+
+def test_a_correct_modal_is_left_alone(corpus):
+    written = ("ผู้ประกอบวิชาชีพทางการศึกษาพึงช่วยเหลือเกื้อกูลซึ่งกันและกัน"
+               "อย่างสร้างสรรค์ ยึดมั่นในระบบคุณธรรม "
+               "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
+    assert correct_modals(written, corpus) == (written, [])
 
 
 def test_an_ambiguous_sub_item_pointer_is_not_a_wrong_one(corpus):

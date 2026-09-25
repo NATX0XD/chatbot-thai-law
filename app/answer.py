@@ -53,7 +53,7 @@ from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
-    Corpus as SupportIndex, cited_rules, impossible_citations,
+    Corpus as SupportIndex, cited_rules, correct_modals, impossible_citations,
     misattributed_citations, modal_mismatches, points_elsewhere,
     unsupported_claims)
 from app.verify import unsupported_laws
@@ -675,6 +675,13 @@ async def answer_question(question: str) -> Answer:
     text, typed = resolve_citations(text, hits)
     if typed:
         log.info("TYPED NUMBERS %s | %r", typed[:3], question[:70])
+
+    # Which of ต้อง and พึง a rule uses is a fact about the corpus, so it is
+    # corrected here rather than asked for in the repair turn -- which was told
+    # about it every round and shipped the wrong word anyway.
+    text, modals = correct_modals(text, _support_index())
+    if modals:
+        log.info("MODALS FIXED %s | %r", modals[:2], question[:70])
 
     faults = inspect(text, hits)
     # Recorded, not acted on. The number has already been kept or removed by
