@@ -472,9 +472,11 @@ def test_a_repaired_answer_goes_through_the_same_substitution(monkeypatch):
     recorded as repaired.
     """
     drafts = iter([
-        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ (ข้อบังคับคุรุสภา แบบแผนพฤติกรรม"
-        "ตามจรรยาบรรณ 2550 ข้อ 99)",
-        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ [1](ข)(๓)",
+        # naming a regulation the corpus does not hold is a blocking fault, so
+        # a rewrite is asked for
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ ตามข้อบังคับคุรุสภาว่าด้วย"
+        "มาตรฐานวิชาชีพ พ.ศ. 2548",
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ [1]",
     ])
 
     async def fake_complete(system, user):
@@ -482,5 +484,31 @@ def test_a_repaired_answer_goes_through_the_same_substitution(monkeypatch):
 
     monkeypatch.setattr(answer_mod, "complete", fake_complete)
     a = run(answer_question(ANSWERABLE))
-    assert "[1]" not in a.text
     assert a.repair == "accepted"
+    assert "[1]" not in a.text
+
+
+def test_a_prose_number_is_checked_against_what_that_rule_says():
+    """The leak the citation check cannot see by construction.
+
+    "การเกี่ยวข้องกับอบายมุข ... อยู่ในข้อ 9" with a correct citation in
+    brackets beside it: the bracket was checked, the sentence was not, and ข้อ 9
+    is จรรยาบรรณต่อสังคม. Keeping every number the evidence happened to contain
+    let this through, and both assessors named it.
+    """
+    society = _piece("9", text="ผู้ประกอบวิชาชีพทางการศึกษา พึงประพฤติปฏิบัติตน"
+                               "เป็นผู้นำในการอนุรักษ์และพัฒนาเศรษฐกิจ สังคม "
+                               "ศาสนา ศิลปวัฒนธรรม และสิ่งแวดล้อม")
+    vices = _piece("5", text="ครูต้องไม่เกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติด"
+                             "จนขาดสติหรือแสดงกิริยาไม่สุภาพ")
+    text, stray = answer_mod.resolve_citations(
+        "การเกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติดจนขาดสติอยู่ในข้อ 9",
+        [society, vices])
+    assert "ข้อ 9" not in text
+    assert stray == ["ข้อ 9"]
+
+    # and the number that does carry the sentence stays
+    kept, _ = answer_mod.resolve_citations(
+        "การเกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติดจนขาดสติอยู่ในข้อ 5",
+        [society, vices])
+    assert "ข้อ 5" in kept

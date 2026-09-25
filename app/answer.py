@@ -427,12 +427,34 @@ def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
                 match.group(2).translate(THAI_TO_ARABIC)) not in supplied
 
     mispointed: list[str] = []
+    by_number = {(h.rec.get("unit", "มาตรา"), h.rec["section"]): h.rec["text"]
+                 for h in hits}
+
+    def wrong(match: re.Match) -> bool:
+        """A number the model typed that the evidence has, attached to a
+        sentence that rule does not carry.
+
+        Keeping every number the evidence contained let this through: "การ
+        เกี่ยวข้องกับอบายมุข ... อยู่ในข้อ 9" where ข้อ 9 is จรรยาบรรณต่อสังคม
+        and the rule is ข้อ 5. The citation in brackets beside it was right, so
+        nothing looked at the prose. Both assessors named this as the fault the
+        citation check cannot see by construction.
+        """
+        rule = by_number.get((match.group(1),
+                              match.group(2).translate(THAI_TO_ARABIC)))
+        return rule is not None and points_elsewhere(
+            _sentence_before(text, match.start()), rule, _support_index())
+
+    def keep(match: re.Match) -> str:
+        return "" if invented(match) or wrong(match) else match.group(0)
+
     stray = [m.group(0) for m in TYPED_NUMBER.finditer(MARKER.sub("", text))
-             if invented(m)]
+             if invented(m) or wrong(m)]
     text = TYPED_CITATION.sub(
-        lambda m: "" if any(invented(t) for t in TYPED_NUMBER.finditer(m.group(0)))
+        lambda m: "" if any(invented(t) or wrong(t)
+                            for t in TYPED_NUMBER.finditer(m.group(0)))
         else m.group(0), text)
-    text = TYPED_NUMBER.sub(lambda m: "" if invented(m) else m.group(0), text)
+    text = TYPED_NUMBER.sub(keep, text)
     text = BARE_POINTER.sub("", text)
 
     def swap(match: re.Match) -> str:
