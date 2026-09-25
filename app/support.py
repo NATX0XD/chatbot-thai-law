@@ -34,14 +34,24 @@ Distinctive is measured against the corpus: a word in more than a sixth of the
 records carries no information here, because ครู, วิชาชีพ and จรรยาบรรณ are in
 almost every rule.
 
-OFF BY DEFAULT, and it stays off until the third check earns its place. On the
-twelve probes in tests/test_support.py the first two checks are silent on every
-correct answer and catch four of the five known-wrong pairings, but the third
-fires on five of twelve answers a human reads as correct -- because the claim it
-compares is taken from the words *before* the citation, and the writer routinely
-puts the sentence after it instead. Blocking at that rate would cost more than
-the wrong citations do. app/config.py turns it on; until then it logs, which is
-how the data to fix the window gets collected.
+The third check does not block, and after the sixth acceptance run it no longer
+has to. What it finds goes into the repair turn in app/answer.py -- the writer is
+told which rule and which mistake, and writes the answer again. A false positive
+there costs one wasted call; a false positive that refused an answer cost the
+user the answer. app/config.py can still make it block, and the flag rate on
+correct answers is the thing to measure before doing that.
+
+Two extensions the sixth round asked for, both here:
+
+  * the claim is read on *both* sides of the citation. Reading only backwards is
+    what kept this off: the writer puts the sentence after the citation as often
+    as before it, and five of twelve correct answers were flagged for it.
+  * a claim that cites a sub-item is compared against that sub-item, not the
+    whole rule, which is the only way a wrong sub-item number is visible -- the
+    words are all in the rule either way.
+
+And one check that is not about citations at all: conviction_on_thin_evidence,
+for answers that rule on conduct no rule mentions.
 """
 from __future__ import annotations
 
@@ -71,6 +81,10 @@ NAME_WINDOW = 90
 # where a claim starts: the previous line, bullet, or closing bracket
 CLAIM_EDGE = re.compile(r"[\n•]|\)\s")
 MIN_CLAIM_WORDS = 6
+# "ต้อง" is an obligation whose breach is punishable; "พึง" is one that is not.
+# The corpus is careful about which it uses and the writer is not.
+MUST = re.compile(r"ต้อง(?!การ)")
+SHOULD = re.compile(r"พึง")
 COMMON_SHARE = 1 / 6
 # how many of the claim's rarest words have to be looked for in the cited rule
 KEY_WORDS = 3
@@ -90,33 +104,58 @@ def _has(text: str, marker: str) -> bool:
     return any(form in text for form in _forms(marker))
 
 
-def _missing_sub_item(markers: list[str], candidates: list[dict]) -> str | None:
-    """A pointer like "(ก)(๕)" has to land inside the lettered block it names.
+def _block_for(text: str, markers: list[str]) -> str | None:
+    """The part of a rule a pointer like "(ข)(๑)" actually points at.
 
-    Looking for "(๕)" anywhere in the rule is not enough: ข้อ 8 ของข้อบังคับฯ
-    2550 lists two desirable behaviours under (ก) and five undesirable ones
-    under (ข), so "(ก)(๕)" points at nothing while every marker in it exists.
+    Returns None when the pointer lands nowhere. Narrowing matters twice over:
+    it is how "(ก)(๕)" is caught -- ข้อ 8 ของข้อบังคับฯ 2550 lists two desirable
+    behaviours under (ก) and five undesirable ones under (ข), so looking for
+    "(๕)" anywhere in the rule finds it while the pointer means nothing -- and it
+    is what lets a claim be compared against the sub-item it cites rather than
+    against the whole rule, which is how a wrong sub-item number gets noticed.
     """
     letters = [m for m in markers if m in LETTERS]
     numbers = [m for m in markers if m not in LETTERS]
-    for text in (rec["text"] for rec in candidates):
-        blocks = [text]
-        if letters:
-            start = text.find(f"({letters[0]})")
-            if start < 0:
-                continue
-            after = text[start + 3:]
-            ends = [after.find(f"({other})") for other in LETTERS
-                    if other != letters[0] and f"({other})" in after]
-            cut = min([e for e in ends if e >= 0], default=len(after))
-            blocks = [after[:cut]]
-        if all(any(_has(block, n) for block in blocks) for n in numbers):
+
+    if letters:
+        start = text.find(f"({letters[0]})")
+        if start < 0:
             return None
-    return "".join(f"{m})(" for m in markers)[:-2] if markers else None
+        after = text[start + 3:]
+        ends = [after.find(f"({other})") for other in LETTERS
+                if other != letters[0] and f"({other})" in after]
+        text = after[:min([e for e in ends if e >= 0], default=len(after))]
+
+    for number in numbers:
+        found = next((text.find(form) for form in _forms(number)
+                      if form in text), -1)
+        if found < 0:
+            return None
+        text = text[found:]
+        # up to whichever numbered item comes next, whatever its number
+        rest = text[1:]
+        ends = [rest.find(form) for n in range(1, 30)
+                for form in _forms(str(n)) if form in rest]
+        if ends:
+            text = text[:1 + min(ends)]
+    return text
+
+
+def _missing_sub_item(markers: list[str], candidates: list[dict]) -> str | None:
+    if not markers:
+        return None
+    for rec in candidates:
+        if _block_for(rec["text"], markers) is not None:
+            return None
+    return "".join(f"{m})(" for m in markers)[:-2]
 
 
 def _rarest(words: list[str], corpus: "Corpus") -> set[str]:
-    distinctive = [w for w in words if w in corpus.distinctive]
+    # words that only appear because an instrument was named are not part of the
+    # claim: "สภาครูและบุคลากรทางการศึกษา" says nothing about what the sentence
+    # asserts, and it is rare enough to crowd out the words that do
+    distinctive = [w for w in words
+                   if w in corpus.distinctive and w not in corpus.name_words]
     distinctive.sort(key=lambda w: corpus.frequency.get(w, 0))
     return set(distinctive[:KEY_WORDS])
 
@@ -151,6 +190,8 @@ class Corpus:
         # one of them unambiguously. Kept only where that holds.
         self.by_year = {year: next(iter(ids)) for year, ids in years.items()
                         if len(ids) == 1}
+
+        self.name_words = {w for name in self.names for w in _content(name)}
 
         seen = Counter()
         for rec in records:
@@ -188,10 +229,49 @@ def _content(text: str) -> list[str]:
             if len(w) >= 3 and any("ก" <= c <= "ฮ" for c in w)]
 
 
-def _claim_before(answer: str, at: int) -> str:
-    """The sentence the citation is attached to."""
-    edges = [m.end() for m in CLAIM_EDGE.finditer(answer, 0, at)]
-    return answer[(edges[-1] if edges else 0):at]
+def _windows(answer: str, span: tuple[int, int],
+             others: list[tuple[int, int]]) -> list[str]:
+    """The sentences a citation could be attached to: the one in front of it and
+    the one behind it.
+
+    Reading only what came before was what kept this check switched off. The
+    writer puts the sentence on either side -- "ครูต้องไม่ดูหมิ่นศิษย์ (ข้อ 7)"
+    and "(ข้อ 7) ครูต้องไม่ดูหมิ่นศิษย์" are both common -- and five of twelve
+    correct answers were flagged because the text in front was either empty or
+    belonged to the previous citation.
+
+    Both windows stop at the nearest line, bullet or bracket, and at the nearest
+    other citation, so one citation's sentence is never read as another's.
+
+    A citation inside brackets is stepped over completely, name and all. Reading
+    the name as the claim was the first false positive the repair turn produced,
+    and it was expensive: "(พ.ร.บ.สภาครูและบุคลากรทางการศึกษา 2546 มาตรา 50)" was
+    compared against มาตรา 50 on the words สภา and บุคลากร, which the section
+    does not use, and a correct answer -- the five duties, counted right -- was
+    rewritten into a wrong one that counted three.
+    """
+    start, end = span
+    open_at, close_at = _brackets(answer, span)
+
+    edges = [m.end() for m in CLAIM_EDGE.finditer(answer, 0, open_at)]
+    left = max([e for e in edges if e <= open_at], default=0)
+    left = max([left] + [b for _, b in others if b <= open_at])
+
+    edges = [m.start() for m in CLAIM_EDGE.finditer(answer, close_at)]
+    right = min([e for e in edges if e >= close_at], default=len(answer))
+    right = min([right] + [a for a, _ in others if a >= close_at])
+
+    return [answer[left:open_at], answer[close_at:right]]
+
+
+def _brackets(answer: str, span: tuple[int, int]) -> tuple[int, int]:
+    """The bracket pair the citation sits in, or its own span if it sits bare."""
+    start, end = span
+    open_at = answer.rfind("(", 0, start)
+    if open_at < 0 or ")" in answer[open_at:start]:
+        return start, end
+    close_at = answer.find(")", end)
+    return open_at, (close_at + 1 if close_at >= 0 else end)
 
 
 def impossible_citations(answer: str, corpus: Corpus) -> list[str]:
@@ -222,6 +302,7 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
         if message not in problems:
             problems.append(message)
 
+    spans = [m.span() for m in CITATION.finditer(answer)]
     for match in CITATION.finditer(answer):
         unit, raw_number, subs = match.groups()
         number = raw_number.translate(THAI_DIGITS)
@@ -254,18 +335,105 @@ def _walk(answer: str, corpus: Corpus, lexical: bool) -> list[str]:
         if not lexical:
             continue
 
-        claim = _content(_claim_before(answer, match.start()))
-        if len(claim) < MIN_CLAIM_WORDS:
+        others = [s for s in spans if s != match.span()]
+        windows = [w for w in _windows(answer, match.span(), others)
+                   if len(_content(w)) >= MIN_CLAIM_WORDS]
+        if not windows:
             continue
-        # The rarest words the claim uses, not any word it uses. Sharing ครู or
-        # วิชาชีพ with a rule proves nothing -- almost every rule has them -- and
-        # a check that accepts that evidence never fires. "หลักวิชาการ" appears
-        # in one rule, and a sentence built on it that cites a different rule is
-        # citing the wrong one.
-        keys = _rarest(claim, corpus)
-        if not keys:
-            continue
-        if not any(keys & set(_content(rec["text"])) for rec in candidates):
-            report(f"{unit} {number} ไม่มีข้อความรองรับสิ่งที่เขียนไว้ข้างหน้า")
+
+        # the sub-item the citation points at, if it points at one: a claim that
+        # belongs to (ข)(๓) and cites (ข)(๑) matches the rule and not the item,
+        # which is the commonest wrong pointer the acceptance runs turn up
+        texts = [_block_for(rec["text"], markers) or rec["text"]
+                 for rec in candidates] if markers else \
+                [rec["text"] for rec in candidates]
+
+        supported = False
+        for window in windows:
+            # The rarest words the claim uses, not any word it uses. Sharing ครู
+            # or วิชาชีพ with a rule proves nothing -- almost every rule has them
+            # -- and a check that accepts that evidence never fires.
+            # "หลักวิชาการ" appears in one rule, and a sentence built on it that
+            # cites a different rule is citing the wrong one.
+            keys = _rarest(_content(window), corpus)
+            if not keys or any(keys & set(_content(text)) for text in texts):
+                supported = True
+                _modal(window, texts, unit, number, report)
+                break
+        if not supported:
+            where = "อนุข้อที่ชี้" if markers else f"{unit} {number}"
+            report(f"{where} ไม่มีข้อความรองรับประโยคที่อ้างถึง ({unit} {number})")
 
     return problems
+
+
+# "ครูไปหาเสียงช่วยผู้สมัคร ส.ส. ผิดจรรยาบรรณไหม" -- a question that invites a
+# verdict, and the regulations do not address it
+VERDICT_ASKED = re.compile(r"ผิด(จรรยาบรรณ|ไหม|หรือไม่|มั้ย|รึเปล่า)|"
+                           r"เข้าข่าย|ทำได้ไหม|ได้ไหม|ควรไหม")
+VERDICT_GIVEN = re.compile(r"(ถือว่า|ถือเป็น|เข้าข่าย|จึง)\s*(การ)?(กระทำ)?ผิด|"
+                           r"ผิดจรรยาบรรณ(?!ไหม|หรือไม่)|ละเมิดจรรยาบรรณ|"
+                           r"เป็นการฝ่าฝืน|ขัด(ต่อ|กับ)จรรยาบรรณ|"
+                           r"ฝ่าฝืนจรรยาบรรณ|ไม่พึงประสงค์ตามข้อ")
+NOT_A_BREACH = re.compile(r"ไม่ได้เขียน|ไม่ได้กำหนด|ไม่มีข้อ|ไม่ได้ระบุ|"
+                          r"ไม่ปรากฏ|ไม่ได้ห้าม|ไม่ถือว่าผิด|ไม่เข้าข่าย")
+# Below this BM25 score, no rule uses the words the question uses -- see
+# conviction_on_thin_evidence for how the number was picked.
+THIN_EVIDENCE = 10.0
+
+
+def conviction_on_thin_evidence(question: str, answer: str,
+                                bm25_top: float) -> bool:
+    """A verdict of "that breaks the code" with no rule that mentions the conduct.
+
+    Six rounds of acceptance testing never moved this group with instructions.
+    The standing example: a teacher canvassing for a parliamentary candidate. The
+    regulations say nothing about it -- the political restrictions on civil
+    servants live in an act this corpus does not hold -- and the answer convicts
+    anyway, by reaching for ข้อ 15 about ยึดมั่นในระบอบประชาธิปไตย.
+
+    The signal is BM25, not the dense score and not word overlap with the
+    question. Word overlap is the wrong test in this corpus: users write ด่า and
+    the rules write ดูหมิ่นเหยียดหยาม, which is what app/query_expand.py exists
+    to bridge, so a question the corpus answers well can share no word with it.
+    BM25 is measured *after* that bridge, and it separates cleanly where the
+    dense score does not:
+
+        conduct the rules address    ด่านักเรียน 35.9  นินทาเพื่อนครู 44.6
+                                     เรียกเงิน 41.0    มีชู้ 23.9
+                                     หลักวิชาผิด 11.9  (the lowest measured)
+        conduct they do not          หาเสียงให้ ส.ส. 8.5   ขายประกัน 7.7
+                                     ขับรถเร็ว 6.4        ย้อมผม 6.4
+        dense, for both              0.52 -- 0.71, no separation at all
+
+    This does not block. It adds a line to the repair turn, and the model still
+    holds the evidence: if a rule really does cover the conduct it can keep the
+    verdict. A false positive costs a sentence, not an answer.
+    """
+    if bm25_top >= THIN_EVIDENCE or not VERDICT_ASKED.search(question):
+        return False
+    verdicts = [m.start() for m in VERDICT_GIVEN.finditer(answer)]
+    if not verdicts:
+        return False
+    # An answer that hedges and then convicts anyway is still convicting, and it
+    # is the commoner shape: "ตัวบทไม่ได้ระบุชัดเจนว่าห้าม ... แต่ ... ถือว่าผิด
+    # จรรยาบรรณ". Only a disclaimer that has the last word counts as one.
+    hedges = [m.start() for m in NOT_A_BREACH.finditer(answer)]
+    return not hedges or max(verdicts) > max(hedges)
+
+
+def _modal(claim: str, texts: list[str], unit: str, number: str, report) -> None:
+    """"พึง" and "ต้อง" are not the same obligation.
+
+    ข้อ 14 says ผู้ประกอบวิชาชีพ *พึง* ช่วยเหลือเกื้อกูลซึ่งกันและกัน -- a duty
+    the regulation states and does not punish. Answers that report it as "ต้อง"
+    tell a teacher they can be disciplined for something the text does not say
+    that about, and the tester has been catching it every round.
+    """
+    rules = " ".join(texts)
+    if SHOULD.search(rules) and not MUST.search(rules) \
+            and MUST.search(claim) and not SHOULD.search(claim):
+        report(f"{unit} {number} ใช้คำว่า “พึง” แต่คำตอบเขียนว่า “ต้อง”")
+    elif MUST.search(rules) and not SHOULD.search(rules) \
+            and SHOULD.search(claim) and not MUST.search(claim):
+        report(f"{unit} {number} ใช้คำว่า “ต้อง” แต่คำตอบเขียนว่า “พึง”")

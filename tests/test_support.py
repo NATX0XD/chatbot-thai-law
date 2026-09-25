@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """Checking a citation against the rule it points at.
 
-The wrong pairings here are quoted from four rounds of acceptance testing, and
-the right ones are answers the same tester passed. Both halves matter: the check
-this module exists to enable is only worth switching on if it stays silent on
-the second half, and today it does not -- see the flag-rate test at the bottom,
-which pins the reason it ships off.
+The wrong pairings here are quoted from six rounds of acceptance testing, and the
+right ones are answers the same tester passed. Both halves matter: a check that
+fires on correct answers is worse than no check, because what it costs is the
+answer. The structural checks block; the ones that judge meaning feed the repair
+turn instead, which is what makes a false positive survivable.
 """
 import os
 
@@ -13,7 +13,9 @@ import pytest
 
 from app.config import settings
 from app.corpus_store import open_corpus
-from app.support import Corpus, impossible_citations, unsupported_claims
+from app.support import (
+    Corpus, conviction_on_thin_evidence, impossible_citations,
+    unsupported_claims)
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(settings.corpus_path),
@@ -167,3 +169,100 @@ def test_the_structural_checks_are_the_ones_that_block(corpus):
     wrong_pairing = WRONG_PAIRINGS[0][0]
     assert impossible_citations(wrong_pairing, corpus) == []
     assert unsupported_claims(wrong_pairing, corpus)
+
+
+# --- what the sixth acceptance round asked for -------------------------------
+
+
+def test_the_sentence_after_a_citation_counts_as_its_claim(corpus):
+    """The forward window, and the reason this check stayed off for two rounds.
+
+    "(ข้อ 7) ครูต้องไม่ดูหมิ่นศิษย์" is as common a shape as the reverse, and
+    reading only backwards left nothing in front to compare -- or worse, left
+    the previous citation's sentence there.
+    """
+    assert unsupported_claims(
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7) "
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ", corpus) == []
+
+
+def test_one_citations_sentence_is_not_read_as_anothers(corpus):
+    """Both windows stop at the nearest other citation."""
+    assert unsupported_claims(
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์ "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 7) "
+        "และพึงช่วยเหลือเกื้อกูลซึ่งกันและกันอย่างสร้างสรรค์ ยึดมั่นในระบบคุณธรรม "
+        "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)", corpus) == []
+
+
+def test_a_claim_is_compared_against_the_sub_item_it_cites(corpus):
+    """ข้อ 8 (ข) has five items; citing (ข)(๑) for what (ข)(๓) says is wrong.
+
+    Compared against the whole rule this passes -- the words are all in ข้อ 8.
+    Narrowing to the block the pointer names is what makes it visible.
+    """
+    assert unsupported_claims(
+        "ครูสร้างกลุ่มอิทธิพลภายในองค์การหรือกลั่นแกล้งผู้ร่วมประกอบวิชาชีพ "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 8 (ข)(๑))", corpus)
+    assert unsupported_claims(
+        "ครูสร้างกลุ่มอิทธิพลภายในองค์การหรือกลั่นแกล้งผู้ร่วมประกอบวิชาชีพ "
+        "(ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550 ข้อ 8 (ข)(๓))",
+        corpus) == []
+
+
+def test_reporting_a_should_as_a_must_is_caught(corpus):
+    """ข้อ 14 says พึง. An answer that says ต้อง tells a teacher they can be
+    disciplined for something the regulation does not say that about."""
+    must = ("ผู้ประกอบวิชาชีพทางการศึกษาต้องช่วยเหลือเกื้อกูลซึ่งกันและกัน"
+            "อย่างสร้างสรรค์ ยึดมั่นในระบบคุณธรรม "
+            "(ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14)")
+    problems = unsupported_claims(must, corpus)
+    assert problems and "พึง" in problems[0]
+    assert unsupported_claims(must.replace("ต้องช่วยเหลือ", "พึงช่วยเหลือ"),
+                              corpus) == []
+
+
+VERDICT = "ครูไปหาเสียงช่วยผู้สมัคร ส.ส. ผิดจรรยาบรรณไหม"
+
+
+def test_a_verdict_with_no_rule_about_the_conduct_is_reported():
+    """KSP-040, wrong in the same way for six rounds.
+
+    The regulations say nothing about canvassing; the political restrictions on
+    civil servants are in an act this corpus does not hold. BM25 is the signal
+    -- 8.5 here against 24 to 45 for conduct the rules do describe -- because
+    word overlap with the question is exactly what query expansion exists to
+    make unnecessary.
+    """
+    assert conviction_on_thin_evidence(
+        VERDICT, "การหาเสียงช่วยผู้สมัคร ส.ส. ถือว่าผิดจรรยาบรรณต่อสังคม", 8.5)
+
+
+def test_an_answer_that_says_the_code_is_silent_is_not_a_conviction():
+    assert not conviction_on_thin_evidence(
+        VERDICT, "ข้อบังคับจรรยาบรรณไม่ได้เขียนเรื่องการหาเสียงไว้โดยตรง", 8.5)
+
+
+def test_conduct_the_rules_do_describe_is_left_alone():
+    """The lowest in-domain verdict question measured scores 11.9."""
+    assert not conviction_on_thin_evidence(
+        "ครูด่านักเรียนหน้าชั้นเรียน ผิดจรรยาบรรณไหม",
+        "ถือว่าผิดจรรยาบรรณต่อผู้รับบริการ", 35.9)
+    assert not conviction_on_thin_evidence(
+        "ครูใช้หลักวิชาผิดจนศิษย์เสียหาย เข้าข่ายพฤติกรรมใด",
+        "ถือว่าผิดจรรยาบรรณต่อผู้รับบริการ", 11.9)
+
+
+def test_a_hedge_followed_by_a_verdict_is_still_a_verdict():
+    """The commoner shape, and the one that slipped through first.
+
+    "ตัวบทไม่ได้ระบุชัดเจนว่าห้าม ... แต่ ... ถือว่าผิดจรรยาบรรณ" reads to a
+    teacher as a conviction. Only a disclaimer with the last word counts.
+    """
+    assert conviction_on_thin_evidence(
+        VERDICT,
+        "ตัวบทไม่ได้ระบุชัดเจนว่าห้ามเข้าร่วมกิจกรรมทางการเมืองทุกกรณี "
+        "แต่การกระทำที่ขัดกับการเป็นแบบอย่างที่ดี ถือว่าผิดจรรยาบรรณ", 8.5)
+    assert not conviction_on_thin_evidence(
+        VERDICT,
+        "บางคนมองว่าถือว่าผิดจรรยาบรรณ แต่ข้อบังคับไม่ได้เขียนเรื่องนี้ไว้", 8.5)

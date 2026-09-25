@@ -28,6 +28,15 @@ Five guards, catching five different failures:
 
 None of them spends an LLM call except the last three, which read what the model
 already wrote. The model is never asked whether it should have answered.
+
+What a guard does when it fires changed after the sixth acceptance run. Refusing
+was costing answers to questions the corpus answers well: the tester's words were
+that a correct catch "still leaves the user with nothing". So a guard that fires
+now writes down what is wrong and the writer gets one more turn with that note in
+front of it -- see inspect and REPAIR. Only if the second attempt is still wrong
+does the refusal stand. The note is specific ("ข้อ 14 ใช้คำว่า พึง แต่คำตอบเขียนว่า
+ต้อง"), because a general instruction to be careful is what six rounds of prompt
+edits already were, and it did not hold.
 """
 from __future__ import annotations
 
@@ -44,7 +53,8 @@ from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
-    Corpus as SupportIndex, impossible_citations, unsupported_claims)
+    Corpus as SupportIndex, conviction_on_thin_evidence, impossible_citations,
+    unsupported_claims)
 from app.verify import unsupported_laws
 
 log = logging.getLogger(__name__)
@@ -79,6 +89,30 @@ MISCITED = (
     "ระบบร่างคำตอบโดยอ้างถึง {sections} ซึ่งไม่ตรงกับตัวบทที่ค้นเจอ "
     "ผมเลยไม่ส่งคำตอบนั้นให้ เพราะเลขข้อที่ผิดจะพาไปอ่านกฎคนละข้อ\n\n"
     "ลองถามใหม่ให้เจาะจงขึ้น หรือดูตัวบทฉบับเต็มที่ ksp.or.th/laws ครับ"
+)
+
+REPAIR = """
+คำตอบที่คุณเพิ่งเขียนมีข้อผิดพลาดที่ตรวจพบจากการเทียบกับตัวบทโดยตรง ดังนี้
+
+{problems}
+
+เขียนคำตอบใหม่ทั้งหมดโดยแก้ข้อผิดพลาดข้างต้น ใช้ได้เฉพาะตัวบทที่ให้ไว้เท่านั้น
+ถ้าข้อที่อ้างไม่ได้เขียนเรื่องที่ถามไว้ ให้บอกตามตรงว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้
+แล้วอธิบายว่าข้อที่ใกล้เคียงที่สุดพูดถึงอะไร ดีกว่าอ้างข้อที่ไม่ตรง
+ตอบเฉพาะคำตอบใหม่ ไม่ต้องอธิบายว่าแก้อะไร"""
+
+THIN = ("ตัวบทที่ค้นได้ไม่มีข้อใดกล่าวถึงพฤติกรรมที่ถามโดยตรง "
+        "ถ้าไม่มีข้อใดเขียนเรื่องนี้ไว้จริง ๆ อย่าฟันธงว่าผิดจรรยาบรรณ "
+        "ให้บอกว่าข้อบังคับจรรยาบรรณไม่ได้เขียนเรื่องนี้ไว้โดยตรง "
+        "และถ้าเรื่องนี้มีกฎหมายอื่นกำกับอยู่ ให้บอกว่าอยู่นอกคลังนี้")
+
+NO_RULE = (
+    "ข้อบังคับจรรยาบรรณที่อยู่ในคลังนี้ไม่ได้เขียนเรื่องนี้ไว้โดยตรงครับ "
+    "ผมจึงไม่ฟันธงว่าผิดหรือไม่ผิด เพราะการฟันธงโดยไม่มีข้อรองรับ "
+    "เสียหายกว่าการบอกว่าไม่มีข้อเขียนไว้\n\n"
+    "ข้อที่ใกล้เคียงที่สุดเท่าที่คลังมี คือ\n\n{nearest}\n\n"
+    "ถ้าเรื่องนี้มีกฎหมายอื่นกำกับอยู่ เช่น ระเบียบข้าราชการครูหรือกฎหมายเลือกตั้ง "
+    "เรื่องนั้นอยู่นอกคลังนี้ ตรวจสอบกับต้นสังกัดหรือดูตัวบทที่ ksp.or.th/laws ครับ"
 )
 
 SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อมูลเรื่องจรรยาบรรณวิชาชีพทางการศึกษา สำหรับครูและผู้ปกครอง ตอบผ่านแอปแชท LINE
@@ -319,6 +353,88 @@ def _support_index() -> SupportIndex:
     return _support
 
 
+@dataclass
+class Fault:
+    """Something wrong with a draft answer, and what to do about it.
+
+    `note` goes to the writer in the repair turn, so it names the rule and the
+    mistake rather than describing a category. `blocks` says whether the answer
+    is withheld when the repair fails: structural mistakes block, because they
+    are facts about the corpus; judgements about meaning do not, because they
+    can be wrong and a wrong refusal costs more than a wrong side-citation.
+    """
+    note: str
+    blocks: bool
+    kind: str = ""
+    gap: object = None
+
+    async def refuse(self, question: str, hits: list[Hit]) -> Answer:
+        if self.gap is not None:
+            return Answer(text=await phrase_refusal(question, self.gap),
+                          hits=hits, in_scope=False, error=self.kind)
+        if self.kind == "thin evidence":
+            # not a dead end: the nearest rules are shown, because "the code does
+            # not say" is only useful next to what it does say
+            nearest = "\n\n".join(f"• {h.citation}\n{h.rec['text'][:220]}"
+                                   for h in hits[:3])
+            return Answer(text=NO_RULE.format(nearest=nearest), hits=hits,
+                          citations=[h.citation for h in hits[:3]],
+                          error=self.kind)
+        template = FABRICATED if self.kind == "unsupported citations" else MISCITED
+        return Answer(text=template.format(laws=self.note, sections=self.note),
+                      hits=hits, in_scope=False, error=self.kind)
+
+
+def inspect(question: str, text: str, hits: list[Hit],
+            bm25_top: float) -> list[Fault]:
+    """Everything wrong with a draft, in one pass, so the repair turn sees it all.
+
+    Reporting one fault at a time made the writer fix that one and break another,
+    which is most of what the regression column of the acceptance runs was.
+    """
+    evidence = [h.rec["text"] for h in hits]
+    faults: list[Fault] = []
+
+    # the answer may drift into law the corpus does not hold without ever naming
+    # it as a citation -- civil-service discipline explained out of the ethics
+    # regulations is the case this was written for. It cites nothing wrong;
+    # there is simply nothing behind what it says.
+    strayed = find_gap_in_answer(text, evidence)
+    if strayed:
+        faults.append(Fault(
+            f"คำตอบพูดถึง{strayed.topic} ซึ่งอยู่ใน{strayed.code} ไม่ได้อยู่ในคลังนี้",
+            blocks=True, kind="answer beyond corpus", gap=strayed))
+
+    # the model may answer from its own memory. Whether the instrument exists is
+    # asked of the whole corpus -- a real regulation cited from memory can still
+    # be checked, and refusing it as fabricated was costing correct answers.
+    for law in unsupported_laws(text, _support_index().all_citations, evidence):
+        faults.append(Fault(f"คำตอบอ้าง {law} ซึ่งไม่มีอยู่ในคลังข้อมูล",
+                            blocks=True, kind="unsupported citations"))
+
+    # an answer can cite the right regulation and the wrong rule inside it, which
+    # reads as correct and sends the reader to text that does not say what they
+    # were told it says. Checked against the corpus rather than the retrieved
+    # set: ข้อ 99 of a regulation with 24 rules does not exist either way.
+    for problem in impossible_citations(text, _support_index()):
+        faults.append(Fault(problem, blocks=True, kind="unsupported sections"))
+
+    for problem in unsupported_claims(text, _support_index()):
+        faults.append(Fault(problem, blocks=settings.claim_check_blocks,
+                            kind="unsupported claims"))
+
+    # This one blocks, and unusually it blocks into an answer rather than a
+    # refusal. Six rounds of instructions never moved this group, and the repair
+    # note does not move it either -- the writer keeps the verdict and changes
+    # the wording around it. So the answer shape is taken out of its hands: the
+    # nearest rules are shown with a plain statement that none of them covers the
+    # conduct, which is what a teacher needed to know in the first place.
+    if conviction_on_thin_evidence(question, text, bm25_top):
+        faults.append(Fault(THIN, blocks=True, kind="thin evidence"))
+
+    return faults
+
+
 async def answer_question(question: str) -> Answer:
     question = (question or "").strip()
     if not question:
@@ -387,45 +503,27 @@ async def answer_question(question: str) -> Answer:
             citations=[h.citation for h in hits],
             hits=hits, error="degenerate answer")
 
-    # the answer may drift into law the corpus does not hold without ever naming
-    # it as a citation -- social security explained out of labour law is the case
-    # this was written for. Checked before the citation guard because a leak of
-    # this kind cites nothing wrong; there is simply nothing behind what it says.
-    strayed = find_gap_in_answer(text, [h.rec["text"] for h in hits])
-    if strayed:
-        log.warning("REFUSED answer-side gap=%s | %r", strayed.topic, question[:80])
-        return Answer(text=await phrase_refusal(question, strayed), hits=hits,
-                      in_scope=False, error="answer beyond corpus")
+    faults = inspect(question, text, hits, result.max_bm25)
+    if faults:
+        log.info("REPAIRING %s | %r", [f.note for f in faults][:3], question[:70])
+        try:
+            second = await complete(SYSTEM_PROMPT, user_prompt + REPAIR.format(
+                problems="\n".join("- " + f.note for f in faults)))
+        except LLMUnavailable:
+            second = ""
+        if second and not looks_degenerate(second):
+            left = inspect(question, second, hits, result.max_bm25)
+            # a repair that trades one fault for another is not a repair; only a
+            # strictly shorter list is accepted, so a bad second try cannot make
+            # the answer worse than the first one was
+            if len(left) < len(faults):
+                log.info("REPAIRED %d -> %d | %r", len(faults), len(left),
+                         question[:60])
+                text, faults = second, left
+        blocking = next((f for f in faults if f.blocks), None)
+        if blocking:
+            log.warning("BLOCKED %s | %r", blocking.note, question[:80])
+            return await blocking.refuse(question, hits)
 
-    citations = [h.citation for h in hits]
-    # last line of defence: the model may answer from its own memory. The
-    # question is whether the instrument exists at all, so it is asked of the
-    # whole corpus -- a real regulation cited from memory can still be checked,
-    # and refusing it as fabricated was costing correct answers every round.
-    invented = unsupported_laws(text, _support_index().all_citations,
-                                [h.rec["text"] for h in hits])
-    if invented:
-        log.warning("HALLUCINATION blocked %s | %r", invented, question[:80])
-        return Answer(text=FABRICATED.format(laws=", ".join(invented[:2])),
-                      hits=hits, in_scope=False, error="unsupported citations")
-
-    # the number matters as much as the name. An answer can cite the right
-    # regulation and the wrong rule inside it, which reads as correct and sends
-    # the reader to text that does not say what they were told it says.
-    # the number matters as much as the name, and it is checked against the
-    # corpus rather than the retrieved set: ข้อ 99 of a regulation with 24 rules
-    # does not exist whether or not that regulation was handed over.
-    miscited = impossible_citations(text, _support_index())
-    if miscited:
-        log.warning("MISCITED %s | %r", miscited, question[:80])
-        return Answer(text=MISCITED.format(sections=", ".join(miscited[:3])),
-                      hits=hits, in_scope=False, error="unsupported sections")
-
-    unsupported = unsupported_claims(text, _support_index())
-    if unsupported:
-        log.warning("UNSUPPORTED CLAIM %s | %r", unsupported, question[:80])
-        if settings.claim_check_blocks:
-            return Answer(text=MISCITED.format(sections=", ".join(unsupported[:3])),
-                          hits=hits, in_scope=False, error="unsupported claims")
-
-    return Answer(text=tidy_for_chat(text), citations=citations, hits=hits)
+    return Answer(text=tidy_for_chat(text),
+                  citations=[h.citation for h in hits], hits=hits)
