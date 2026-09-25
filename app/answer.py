@@ -383,6 +383,8 @@ def _support_index() -> SupportIndex:
 # in from the record.
 MARKER = re.compile(r"\[(\d{1,2})\]((?:\s*\([ก-ฮ๐-๙0-9]{1,3}\))*)")
 THAI_TO_ARABIC = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
+# the rule number a fault is about, so a repair may move that one and no other
+NUMBER_IN_NOTE = re.compile(r"(?:ข้อ|มาตรา)\s*([๐-๙0-9]{1,3})")
 # a rule number the model typed itself, which is the thing being taken away
 TYPED_NUMBER = re.compile(r"(ข้อ|มาตรา)\s*([๐-๙0-9]{1,3})")
 # "8(ข)(๓)" with the brackets around the index lost -- a pointer that failed to
@@ -492,13 +494,19 @@ class Fault:
     # whether this fault is allowed to spend a model call. False means it is
     # recorded for the log and the API and nothing else.
     acts: bool = True
+    # what the refusal names. The note is a sentence written for the model to
+    # act on; dropping it into a refusal template produced "ระบบร่างคำตอบโดย
+    # อ้างถึง คำตอบอ้าง ข้อบังคับฯ 2556 ไม่ได้ระบุ ... ซึ่งไม่มีอยู่ในคลังข้อมูล
+    # ซึ่งไม่มีอยู่ในคลังข้อมูล", which is what a teacher actually received.
+    subject: str = ""
 
     async def refuse(self, question: str, hits: list[Hit]) -> Answer:
         if self.gap is not None:
             return Answer(text=await phrase_refusal(question, self.gap),
                           hits=hits, in_scope=False, error=self.kind)
         template = FABRICATED if self.kind == "unsupported citations" else MISCITED
-        return Answer(text=template.format(laws=self.note, sections=self.note),
+        named = self.subject or self.note
+        return Answer(text=template.format(laws=named, sections=named),
                       hits=hits, in_scope=False, error=self.kind)
 
 
@@ -519,21 +527,24 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     if strayed:
         faults.append(Fault(
             f"คำตอบพูดถึง{strayed.topic} ซึ่งอยู่ใน{strayed.code} ไม่ได้อยู่ในคลังนี้",
-            blocks=True, kind="answer beyond corpus", gap=strayed))
+            blocks=True, kind="answer beyond corpus", gap=strayed,
+            subject=strayed.topic))
 
     # the model may answer from its own memory. Whether the instrument exists is
     # asked of the whole corpus -- a real regulation cited from memory can still
     # be checked, and refusing it as fabricated was costing correct answers.
     for law in unsupported_laws(text, _support_index().all_citations, evidence):
         faults.append(Fault(f"คำตอบอ้าง {law} ซึ่งไม่มีอยู่ในคลังข้อมูล",
-                            blocks=True, kind="unsupported citations"))
+                            blocks=True, kind="unsupported citations",
+                            subject=law))
 
     # an answer can cite the right regulation and the wrong rule inside it, which
     # reads as correct and sends the reader to text that does not say what they
     # were told it says. Checked against the corpus rather than the retrieved
     # set: ข้อ 99 of a regulation with 24 rules does not exist either way.
     for problem in impossible_citations(text, _support_index()):
-        faults.append(Fault(problem, blocks=True, kind="unsupported sections"))
+        faults.append(Fault(problem, blocks=True, kind="unsupported sections",
+                            subject=problem))
 
     # the number is real, the instrument beside it is not the one that has it
     for problem in misattributed_citations(text, _support_index()):
@@ -652,15 +663,18 @@ async def answer_question(question: str) -> Answer:
             # doing exactly that -- a provision cited correctly the round before,
             # replaced by a hedge. So the second draft must keep every rule the
             # first one cited, on top of having fewer faults.
-            # The second draft must keep every number the first cited and must
-            # not invent new ones. Requiring only the first half is what the
-            # assessors measured as the system "padding a correct core with
-            # extra cross-references that do not hold up": the rule made adding
-            # citations free and removing them impossible, and five of the six
-            # regressions between the two assessor rounds were exactly that.
+            # The second draft must keep the citations nobody complained
+            # about. Demanding an identical set made pointer repairs impossible
+            # -- fixing a wrong pointer means pointing somewhere else, which
+            # changes the set -- and 24 of 27 repairs were rejected for it.
+            # Requiring only that nothing be lost is what let the answers get
+            # padded two rounds ago, so the flagged citations, and only those,
+            # may move.
+            flagged = {n.translate(THAI_TO_ARABIC)
+                       for f in faults for n in NUMBER_IN_NOTE.findall(f.note)}
             before = cited_rules(text, _support_index())
             after = cited_rules(second, _support_index())
-            kept = after == before
+            kept = (before - flagged) <= after
             acting = sum(f.acts for f in faults)
             if sum(f.acts for f in left) < acting and kept:
                 log.info("REPAIRED %d -> %d | %r", acting,

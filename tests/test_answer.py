@@ -444,3 +444,20 @@ def test_a_pointer_at_a_rule_that_says_nothing_of_the_kind_is_reported():
         "ผู้ประกอบวิชาชีพต้องให้บริการด้วยความจริงใจและเสมอภาค "
         "โดยไม่เรียกรับผลประโยชน์จากการใช้ตำแหน่งหน้าที่โดยมิชอบ [1]", [wrong])
     assert problems and "ข้อ 51" in problems[0]
+
+
+def test_a_refusal_names_the_law_and_does_not_recite_the_note(monkeypatch):
+    """The note is written for the model; the refusal is written for a teacher.
+
+    Dropping one into the other produced "ระบบร่างคำตอบโดยอ้างถึง คำตอบอ้าง
+    ข้อบังคับคุรุสภา 2556 ไม่ได้ระบุพฤติกรรม ... ซึ่งไม่มีอยู่ในคลังข้อมูล
+    ซึ่งไม่มีอยู่ในคลังข้อมูล", which is what a user actually received.
+    """
+    async def fake_complete(system, user):
+        return "ครูต้องมีวินัยในตนเองตามข้อบังคับคุรุสภาว่าด้วยมาตรฐานวิชาชีพ พ.ศ. 2548"
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert a.error == "unsupported citations"
+    assert a.text.count("ซึ่งไม่มีอยู่ในคลังข้อมูล") == 1
+    assert "คำตอบอ้าง" not in a.text
