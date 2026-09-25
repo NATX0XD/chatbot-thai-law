@@ -166,6 +166,10 @@ class Cursor:
     def _fill(cell, text, template, *, bold=False, align=None):
         cell.text = ""
         para = cell.paragraphs[0]
+        # cell.text = "" leaves an empty run behind, which carries the theme
+        # font and shows up as a stray formatting mark when the cell is edited
+        for stray in list(para.runs):
+            stray._element.getparent().remove(stray._element)
         run = para.add_run(text)
         run.bold = bold
         clone_format(para, template)
