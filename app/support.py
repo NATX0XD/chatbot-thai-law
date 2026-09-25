@@ -464,6 +464,26 @@ def _walk(answer: str, corpus: Corpus) -> list[tuple[str, str]]:
     return problems
 
 
+def points_elsewhere(sentence: str, rule_text: str, corpus: "Corpus") -> bool:
+    """Does this sentence belong to the rule it was pointed at?
+
+    Once the model points at evidence instead of typing numbers, this check
+    gets the signal it never had before: there is no doubt about which record a
+    citation refers to, so an overlap of zero distinctive words is a wrong
+    pointer rather than an attribution the checker could not resolve. The
+    assessors' remaining wrong-ข้อ cases are all of this shape -- the text of
+    2556 ข้อ 13 printed under a citation to 2568 ข้อ 51, faithfully labelled
+    with a record that says nothing of the kind.
+
+    Silent on short sentences, as always: there is nothing to compare.
+    """
+    words = _content(sentence)
+    if len(words) < MIN_CLAIM_WORDS:
+        return False
+    keys = _rarest(words, corpus)
+    return bool(keys) and not (keys & set(_content(rule_text)))
+
+
 def cited_rules(answer: str, corpus: "Corpus") -> set[str]:
     """The rule numbers an answer cites that exist somewhere in the corpus.
 

@@ -54,7 +54,8 @@ from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
     Corpus as SupportIndex, cited_rules, impossible_citations,
-    misattributed_citations, modal_mismatches, unsupported_claims)
+    misattributed_citations, modal_mismatches, points_elsewhere,
+    unsupported_claims)
 from app.verify import unsupported_laws
 
 log = logging.getLogger(__name__)
@@ -423,6 +424,7 @@ def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
         return (match.group(1),
                 match.group(2).translate(THAI_TO_ARABIC)) not in supplied
 
+    mispointed: list[str] = []
     stray = [m.group(0) for m in TYPED_NUMBER.finditer(MARKER.sub("", text))
              if invented(m)]
     text = TYPED_CITATION.sub(
@@ -437,10 +439,23 @@ def resolve_citations(text: str, hits: list[Hit]) -> tuple[str, list[str]]:
             return ""          # a pointer at evidence that was never supplied
         rec = hits[index].rec
         subs = "".join(match.group(2).split())
+        sentence = _sentence_before(text, match.start())
+        if points_elsewhere(sentence, rec["text"], _support_index()):
+            mispointed.append(f"{hits[index].citation} "
+                              f"ไม่มีข้อความรองรับประโยคที่ชี้มา")
         return f"({hits[index].citation}{subs}{_whose(rec)})"
 
     text = MARKER.sub(swap, text)
-    return re.sub(r"[ \t]{2,}", " ", text), stray
+    return re.sub(r"[ \t]{2,}", " ", text), stray + mispointed
+
+
+SENTENCE_EDGE = re.compile(r"[\n•]|[.!?]\s")
+
+
+def _sentence_before(text: str, at: int) -> str:
+    """The sentence a pointer sits at the end of."""
+    edges = [m.end() for m in SENTENCE_EDGE.finditer(text, 0, at)]
+    return text[(edges[-1] if edges else 0):at]
 
 
 def _whose(rec: dict) -> str:

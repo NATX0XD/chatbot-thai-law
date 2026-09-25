@@ -343,10 +343,14 @@ def test_a_repealed_regulation_is_marked_in_the_context_the_model_sees(spy_llm):
 # --- citations assembled from the record, not typed by the model -------------
 
 
-def _piece(section, *, sysid="ksp-2550", chapter=None, short=None):
+def _piece(section, *, sysid="ksp-2550", chapter=None, short=None, text=None):
     return answer_mod.Hit(rec={
         "id": f"{sysid}:{section}", "sysid": sysid, "unit": "ข้อ",
-        "section": section, "act": "", "text": "",
+        "section": section, "act": "",
+        # real-ish text: a pointer is checked against the record it names, so a
+        # record with nothing in it reads as a pointer at the wrong rule
+        "text": text or "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ "
+                        "และต้องไม่จูงใจโน้มน้าวให้ปฏิบัติขัดต่อศีลธรรม",
         "short": short or "ข้อบังคับคุรุสภา แบบแผนพฤติกรรมตามจรรยาบรรณ 2550",
         "chapters": [chapter] if chapter else [],
     }, rrf=0.0)
@@ -361,10 +365,10 @@ def test_a_pointer_becomes_the_citation_of_the_evidence_it_points_at():
     the number beside it is not. The model typed 266 rule numbers across 60
     answers; now it points and the citation is read off the record."""
     hits = [_piece("7", chapter=TEACHER), _piece("12", chapter=HEAD)]
-    text, typed = answer_mod.resolve_citations(
-        "ครูต้องไม่ดูหมิ่นศิษย์ [1](ข)(๓) ส่วนผู้บริหาร [2]", hits)
-    assert "ข้อ 7(ข)(๓)" in text and "ข้อ 12" in text
-    assert not typed
+    text, problems = answer_mod.resolve_citations(
+        "ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ [1](ข)(๓)", hits)
+    assert "ข้อ 7(ข)(๓)" in text
+    assert not problems
 
 
 def test_the_citation_says_whose_duty_it_is():
@@ -421,3 +425,22 @@ def test_a_pointer_that_lost_its_brackets_is_not_left_looking_like_a_rule():
         "ครูต้องไม่ดูหมิ่นศิษย์ 8(ข)(๓)", [_piece("7", chapter=TEACHER)])
     assert "8(ข)(๓)" not in text
     assert "ครูต้องไม่ดูหมิ่นศิษย์" in text
+
+
+def test_a_pointer_at_a_rule_that_says_nothing_of_the_kind_is_reported():
+    """The fault that replaced the one taking numbers away fixed.
+
+    The model stopped typing wrong numbers and started pointing at wrong
+    records: the text of 2556 ข้อ 13 printed under a citation to 2568 ข้อ 51,
+    labelled faithfully with a record that says nothing of the kind. Now that a
+    citation names exactly one record, zero shared distinctive words is a wrong
+    pointer rather than an attribution the checker could not resolve.
+    """
+    wrong = _piece("51", sysid="ksp-2568",
+                   short="ข้อบังคับคุรุสภา การพิจารณาการประพฤติผิดจรรยาบรรณ 2568",
+                   text="เมื่อการสอบสวนแล้วเสร็จ ให้คณะอนุกรรมการสอบสวนทำรายงาน"
+                        "การสอบสวนเสนอต่อคณะกรรมการมาตรฐานวิชาชีพ")
+    _, problems = answer_mod.resolve_citations(
+        "ผู้ประกอบวิชาชีพต้องให้บริการด้วยความจริงใจและเสมอภาค "
+        "โดยไม่เรียกรับผลประโยชน์จากการใช้ตำแหน่งหน้าที่โดยมิชอบ [1]", [wrong])
+    assert problems and "ข้อ 51" in problems[0]
