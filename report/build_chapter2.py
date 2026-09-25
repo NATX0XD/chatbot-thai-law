@@ -36,13 +36,15 @@ from docx.shared import Inches, Pt, RGBColor
 
 from report.chapter2_content import CHAPTER, REFERENCES
 from report.chapter3_content import CHAPTER as CHAPTER3
+from report.chapter4_content import CHAPTER as CHAPTER4
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIGURES = os.path.join(HERE, "figures")
 SOURCE = os.path.expanduser("~/Downloads/Chatbot เล่ม.docx")
-TARGET = os.path.expanduser("~/Downloads/Chatbot เล่ม (บทที่ 2-3).docx")
+TARGET = os.path.expanduser("~/Downloads/Chatbot เล่ม (บทที่ 2-4).docx")
 MARKDOWN = os.path.join(HERE, "บทที่2-ทฤษฎีที่เกี่ยวข้อง.md")
 MARKDOWN3 = os.path.join(HERE, "บทที่3-ขั้นตอนและวิธีการดำเนินการวิจัย.md")
+MARKDOWN4 = os.path.join(HERE, "บทที่4-ผลการดำเนินงานวิจัย.md")
 
 FIGURE_WIDTH = Inches(6.0)     # fits the KMUTNB margins with room to spare
 INDENT = Inches(0.5)           # the thesis indents the first line of a paragraph
@@ -137,6 +139,20 @@ class Cursor:
         return table
 
 
+def make_chapter(doc, title: str, after_title: str):
+    """Create a chapter heading the thesis does not have yet.
+
+    Chapter 4 was never started in the template, so it is added after the last
+    element of the chapter before it, using the same Heading 1 style the other
+    chapters use -- which is what keeps it in the automatic table of contents.
+    """
+    previous, body = chapter_span(doc, after_title)
+    anchor = body[-1]._element if body else previous._element
+    heading = doc.add_paragraph(title, style="Heading 1")
+    anchor.addnext(heading._element)
+    return heading
+
+
 def chapter_span(doc, title: str):
     """(heading, the elements after it that belong to that chapter).
 
@@ -159,7 +175,11 @@ def write_docx() -> None:
     doc = docx.Document(TARGET)
     template = body_style(doc)
 
-    # chapter 3 first: replacing chapter 2 shifts every paragraph index after it
+    # last chapter first: replacing one shifts every paragraph index after it
+    if not any(p.style.name == "Heading 1" and "ผลการดำเนินงานวิจัย" in p.text
+               for p in doc.paragraphs):
+        make_chapter(doc, "ผลการดำเนินงานวิจัย", "ดําเนินการวิจัย")
+    write_chapter(doc, template, "ผลการดำเนินงานวิจัย", CHAPTER4)
     write_chapter(doc, template, "ดําเนินการวิจัย", CHAPTER3)
     write_chapter(doc, template, "ทฤษฎีที่เกี่ยวข้อง", CHAPTER)
 
@@ -285,3 +305,4 @@ if __name__ == "__main__":
     write_docx()
     write_markdown(CHAPTER, "บทที่ 2 ทฤษฎีที่เกี่ยวข้อง", MARKDOWN, REFERENCES)
     write_markdown(CHAPTER3, "บทที่ 3 ขั้นตอนและวิธีการดำเนินการวิจัย", MARKDOWN3)
+    write_markdown(CHAPTER4, "บทที่ 4 ผลการดำเนินงานวิจัย", MARKDOWN4)

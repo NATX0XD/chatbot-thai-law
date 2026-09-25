@@ -55,6 +55,26 @@ th { background: #f7f4f4; font-weight: 600; }
 td.k { color: #8d2230; white-space: nowrap; font-weight: 500; }
 .grow { flex: 1; }
 .center { text-align: center; }
+/* code and terminal listings: the report shows real files and real output,
+   so they are rendered as themselves rather than retyped into a box */
+.code {
+  font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.65;
+  white-space: pre-wrap; background: #fbf9f9; border: 1.5px solid #e2dada;
+  border-radius: 10px; padding: 16px 18px;
+}
+.code .c { color: #8d7f81; }          /* comment */
+.code .k { color: #8d2230; }          /* keyword */
+.code .s { color: #2f7d4f; }          /* string */
+.term {
+  font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.7;
+  white-space: pre-wrap; background: #1b1416; color: #efe9ea;
+  border-radius: 10px; padding: 16px 18px;
+}
+.term .p { color: #7fb98f; }          /* prompt */
+.term .ok { color: #7fb98f; }
+.term .d { color: #9b8f91; }
+.file { font-family: 'JetBrains Mono', monospace; font-size: 13px;
+        color: #857a7c; margin-bottom: 6px; }
 """
 
 
@@ -72,8 +92,19 @@ HEIGHTS = {
     "fig-2-7-stack": 640,
     "fig-3-1-framework": 400,
     "fig-3-2-pipeline": 700,
-    "fig-3-3-guards": 640,
-    "fig-3-4-evalloop": 620,
+    "fig-3-3-fetch-code": 500,
+    "fig-3-4-fetch-run": 420,
+    "fig-3-5-ladder-code": 470,
+    "fig-3-6-audit-run": 320,
+    "fig-3-7-expand-code": 400,
+    "fig-3-8-prompt-code": 380,
+    "fig-3-9-inspect-code": 790,
+    "fig-3-10-api-json": 470,
+    "fig-3-11-pytest": 320,
+    "fig-3-12-testcase": 470,
+    "fig-3-13-guards": 640,
+    "fig-3-14-evalloop": 620,
+    "fig-4-1-trajectory": 500,
 }
 
 # ---------------------------------------------------------------- 2-1 ladder
@@ -335,6 +366,10 @@ def render(name: str, body: str) -> None:
 
 
 # ------------------------------------------------------ บทที่ 3, the method
+#
+# Several of these show real files and real terminal output. They are captured
+# from the repository as it stands, not retyped, so a reader can run the same
+# command and compare.
 
 FIGURES["fig-3-1-framework"] = """
 <div class="col" style="width:1080px">
@@ -379,7 +414,7 @@ FIGURES["fig-3-2-pipeline"] = """
 </div>
 """
 
-FIGURES["fig-3-3-guards"] = """
+FIGURES["fig-3-13-guards"] = """
 <div class="col" style="width:1080px">
   <div class="box accent center"><b>ร่างคำตอบจากแบบจำลองภาษา</b></div>
   <div class="arrow">&#8595;</div>
@@ -403,7 +438,7 @@ FIGURES["fig-3-3-guards"] = """
 </div>
 """
 
-FIGURES["fig-3-4-evalloop"] = """
+FIGURES["fig-3-14-evalloop"] = """
 <div class="col" style="width:1080px">
   <div class="row">
     <div class="col grow">
@@ -428,6 +463,267 @@ FIGURES["fig-3-4-evalloop"] = """
   </div>
 </div>
 """
+
+
+
+
+FIGURES["fig-3-3-fetch-code"] = """
+<div class="col" style="width:1080px">
+  <div class="file">scripts/fetch_ksp.sh</div>
+  <div class="code"><span class="c"># The checksums pin the exact file each URL served on that date. A mismatch
+# means the publisher replaced the document -- look at what changed before
+# updating the hash, because the section numbering may have moved with it.</span>
+<span class="k">set</span> -uo pipefail
+
+<span class="c"># key|sha256|url|label</span>
+DOCS=(
+<span class="s">"ksp-2556|2c3fa473a259ddbd925d9697b7fa114190773447d31ee7e504ce9b570e776f7e|https://ratchakitcha.soc.go.th/documents/1986083.pdf|ข้อบังคับคุรุสภา ว่าด้วยจรรยาบรรณของวิชาชีพ พ.ศ. 2556"</span>
+<span class="s">"ksp-2550|407f62549262423ab09301a329e5dba194099428b155fb8656058ac06a18057c|https://ratchakitcha.soc.go.th/documents/214339.pdf|ข้อบังคับคุรุสภา ว่าด้วยแบบแผนพฤติกรรม..."</span>
+<span class="s">"act-2546|f07488b7f91ee88278c6f35cfac5fca6ca6be069ef3385626fb11cec960af533|https://www.ksp.or.th/wp-content/uploads/...|พระราชบัญญัติสภาครูและบุคลากรทางการศึกษา พ.ศ. 2546"</span>
+  <span class="c">... รวม 10 ฉบับ ...</span>
+)
+
+<span class="k">check</span>() {
+  <span class="k">local</span> want=$1 path=$2
+  [ <span class="s">"$(shasum -a 256 &lt;"$path" | cut -d' ' -f1)"</span> = <span class="s">"$want"</span> ]
+}</div>
+</div>
+"""
+
+FIGURES["fig-3-4-fetch-run"] = """
+<div class="col" style="width:1080px">
+  <div class="file">$ bash scripts/fetch_ksp.sh</div>
+  <div class="term">มีอยู่แล้ว: data/raw/ksp/ksp-2556.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2550.pdf
+มีอยู่แล้ว: data/raw/ksp/act-2546.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2553.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2559.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2563.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2568.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2549.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-2569.pdf
+มีอยู่แล้ว: data/raw/ksp/ksp-ann-appeal.pdf
+
+<span class="ok">ครบทั้ง 10 ฉบับใน data/raw/ksp/</span>
+<span class="d">ต่อไป: python -m ingest.extract_ksp</span></div>
+</div>
+"""
+
+FIGURES["fig-3-5-ladder-code"] = """
+<div class="col" style="width:1080px">
+  <div class="file">ingest/thai_pdf_text.py</div>
+  <div class="code"><span class="c"># AngsanaUPC keeps the tone marks in the Private Use Area. Without this map the
+# whole document comes out with every vowel and tone mark missing.</span>
+PUA_MAP = {0xF700: <span class="s">"ั"</span>, 0xF701: <span class="s">"ิ"</span>, 0xF70A: <span class="s">"่"</span>, 0xF70B: <span class="s">"้"</span>,
+           0xF70E: <span class="s">"์"</span>, 0xF710: <span class="s">"ั"</span>, 0xF712: <span class="s">"็"</span>, 0xF8FF: <span class="s">"๐"</span>}
+
+<span class="c"># SARA AM stored as two characters. 648 of them, and newmm splits every word
+# that contains one.</span>
+SPLIT_SARA = re.compile(<span class="s">r"[ก-ฮ]\s+[าำ]"</span>)
+
+<span class="k">def</span> extract(path: str) -&gt; str:
+    <span class="s">&quot;&quot;&quot;Four rungs, cheapest first. The first that passes every gate wins.&quot;&quot;&quot;</span>
+    <span class="k">for</span> rung <span class="k">in</span> (from_text, from_pua, from_legacy, from_ocr):
+        text = rung(path)
+        <span class="k">if</span> passes_every_gate(text):
+            <span class="k">return</span> text
+    <span class="k">raise</span> BadExtraction(path)</div>
+</div>
+"""
+
+FIGURES["fig-3-6-audit-run"] = """
+<div class="col" style="width:1080px">
+  <div class="file">$ python -m ingest.audit_ksp</div>
+  <div class="term"><span class="ok">[ok]</span> เลขข้อเรียงครบ ไม่ข้าม ไม่ซ้ำ: ผ่าน
+<span class="ok">[ok]</span> จำนวนข้อตรงกับที่นับจาก PDF: ผ่าน
+<span class="ok">[ok]</span> ครบห้าด้าน และ 2556 ติดป้ายถูกหมวด: ผ่าน
+<span class="ok">[ok]</span> ไม่มีข้อความหาย: ผ่าน
+<span class="ok">[ok]</span> ไม่มีหัวกระดาษราชกิจจาฯ ปน: ผ่าน
+<span class="ok">[ok]</span> ตัวบทห้าด้านพูดถึงด้านนั้นจริง: ผ่าน
+
+<span class="d">รายงาน: data/processed/corpus_ksp_audit.md</span>
+<span class="ok">ผ่านครบทุกด่าน</span> <span class="d">— ต่อไป: python -m ingest.build_index</span></div>
+</div>
+"""
+
+FIGURES["fig-3-7-expand-code"] = """
+<div class="col" style="width:1080px">
+  <div class="file">app/query_expand.py</div>
+  <div class="code"><span class="c"># colloquial trigger -&gt; legal vocabulary to append. Terms are *appended*, never
+# substituted: the user's own words still drive BM25, and a question that
+# already uses legal vocabulary is unaffected.</span>
+GLOSSARY: tuple[tuple[str, ...], ...] = (
+    (<span class="s">r"ด่า|ดุ|ตะคอก|ด่าทอ"</span>,
+     <span class="s">"ดูหมิ่น เหยียดหยาม ปฏิปักษ์ต่อความเจริญทางจิตใจ อารมณ์ และสังคมของศิษย์"</span>),
+    (<span class="s">r"เรียกเงิน|รับสินบน|เรียกรับ"</span>,
+     <span class="s">"แสวงหาประโยชน์อันเป็นอามิสสินจ้างจากผู้รับบริการ"</span>),
+    (<span class="s">r"มาตรฐานวิชาชีพ|กี่ด้าน"</span>,
+     <span class="s">"มาตรฐานความรู้และประสบการณ์วิชาชีพ มาตรฐานการปฏิบัติงาน มาตรฐานการปฏิบัติตน"</span>),
+    (<span class="s">r"ร้องเรียน|แจ้งความผิด|ฟ้อง"</span>,
+     <span class="s">"กล่าวหา กล่าวโทษ คณะอนุกรรมการสอบสวน"</span>),
+    <span class="c">... รวมกว่า 60 รายการ ...</span>
+)</div>
+</div>
+"""
+
+FIGURES["fig-3-8-prompt-code"] = """
+<div class="col" style="width:1080px">
+  <div class="file">app/answer.py &mdash; SYSTEM_PROMPT (ตัดมาบางส่วนจาก 18 ข้อ)</div>
+  <div class="code">1. ตอบจากตัวบทที่ให้มาเท่านั้น ห้ามใช้ความรู้อื่น
+2. ทุกข้อความที่เป็นสาระ ต้องอ้างที่มาในวงเล็บ โดยคัดลอกชื่อที่กำกับหน้าตัวบทมาทั้งบรรทัด
+   ห้ามย่อชื่อเอง ห้ามสลับชื่อข้ามฉบับ และห้ามเปลี่ยนคำว่า <span class="s">"ข้อ"</span> เป็น <span class="s">"มาตรา"</span> หรือกลับกัน
+   ข้อบังคับคุรุสภาใช้คำว่า <span class="s">"ข้อ"</span> พระราชบัญญัติใช้คำว่า <span class="s">"มาตรา"</span> ข้อบังคับไม่มีมาตรา
+3. ห้ามแต่งเลขข้อหรือเลขมาตรา ถ้าไม่แน่ใจเลขข้อ ให้อธิบายโดยไม่ใส่เลข
+4. ถ้าตัวบทไหนมีคำว่า (ยกเลิกแล้ว) กำกับอยู่ ห้ามอ้างเป็นกฎที่ใช้อยู่
+5. ถ้าตัวบทไม่พอจะตอบ บอกตรง ๆ ว่าตัวบทไม่ได้เขียนเรื่องนี้ไว้ ห้ามเดา
+6. ถ้าคำถามถามถึงครู ห้ามตอบด้วยข้อของผู้บริหารหรือศึกษานิเทศก์
+12. คำว่า <span class="s">"ต้อง"</span> กับ <span class="s">"พึง"</span> ในตัวบทมีน้ำหนักต่างกัน ต้องคัดลอกมาให้ตรงตามที่ตัวบทใช้
+13. ถ้าจะอ้างอนุข้อหรือวรรค เช่น (ก) (ข) (๑) ต้องแน่ใจว่าข้อความนั้นอยู่ในอนุข้อนั้นจริง</div>
+</div>
+"""
+
+FIGURES["fig-3-9-inspect-code"] = """
+<div class="col" style="width:1080px">
+  <div class="file">app/answer.py &mdash; inspect()</div>
+  <div class="code"><span class="k">def</span> inspect(text: str, hits: list[Hit]) -&gt; list[Fault]:
+    <span class="s">&quot;&quot;&quot;Everything wrong with a draft, in one pass, so the repair turn sees it all.
+
+    Reporting one fault at a time made the writer fix that one and break
+    another, which is most of what the regression column of the runs was.
+    &quot;&quot;&quot;</span>
+    faults: list[Fault] = []
+
+    <span class="c"># the answer drifted into law the corpus does not hold</span>
+    <span class="k">if</span> (strayed := find_gap_in_answer(text, evidence)):
+        faults.append(Fault(..., blocks=<span class="k">True</span>))
+
+    <span class="c"># the answer names an instrument that does not exist in the corpus</span>
+    <span class="k">for</span> law <span class="k">in</span> unsupported_laws(text, index.all_citations, evidence):
+        faults.append(Fault(..., blocks=<span class="k">True</span>))
+
+    <span class="c"># the rule number, the unit word, or the sub-item does not exist</span>
+    <span class="k">for</span> problem <span class="k">in</span> impossible_citations(text, index):
+        faults.append(Fault(problem, blocks=<span class="k">True</span>))
+
+    <span class="c"># พึง reported as ต้อง, or the reverse -- two words against the text</span>
+    <span class="k">for</span> problem <span class="k">in</span> modal_mismatches(text, index):
+        faults.append(Fault(problem, blocks=<span class="k">False</span>))
+
+    <span class="c"># measured at 39% of answers with 68% of those wrong: recorded, not acted on</span>
+    <span class="k">for</span> problem <span class="k">in</span> unsupported_claims(text, index):
+        faults.append(Fault(problem, blocks=<span class="k">False</span>, acts=<span class="k">False</span>))
+
+    <span class="k">return</span> faults</div>
+</div>
+"""
+
+FIGURES["fig-3-10-api-json"] = """
+<div class="col" style="width:1080px">
+  <div class="file">$ curl -s -X POST localhost:8077/chat -d '{"question":"ครูนินทาเพื่อนครูผิดข้อไหน"}'</div>
+  <div class="code">{
+  <span class="k">"answer"</span>: <span class="s">"ครูนินทาเพื่อนครูถือว่าผิดจรรยาบรรณต่อผู้ร่วมประกอบวิชาชีพ ... ข้อบังคับคุรุสภา
+             จรรยาบรรณของวิชาชีพ 2556 ข้อ 14 ระบุว่า ผู้ประกอบวิชาชีพทางการศึกษา พึงช่วย …"</span>,
+  <span class="k">"in_scope"</span>: <span class="k">true</span>,
+  <span class="k">"error"</span>: <span class="k">null</span>,
+  <span class="k">"faults"</span>: [<span class="s">"ข้อ 14 ไม่มีข้อความรองรับประโยคที่อ้างถึง (ข้อ 14)"</span>],
+  <span class="k">"repair"</span>: <span class="s">"not attempted"</span>,
+  <span class="k">"sources"</span>: [
+    { <span class="k">"citation"</span>: <span class="s">"ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 14"</span>,
+      <span class="k">"score"</span>: 0.0318, <span class="k">"dense"</span>: 0.7059, <span class="k">"bm25"</span>: 32.517 },
+    { <span class="k">"citation"</span>: <span class="s">"ข้อบังคับคุรุสภา จรรยาบรรณของวิชาชีพ 2556 ข้อ 9"</span>,
+      <span class="k">"score"</span>: 0.0280, <span class="k">"dense"</span>: 0.6114, <span class="k">"bm25"</span>: 14.828 }
+  ]
+}</div>
+  <div class="lbl">ฟิลด์ faults และ repair เพิ่มขึ้นเพื่อให้ผู้ประเมินตรวจกลไกได้โดยตรง แทนการอนุมานจากการเทียบผลกับรอบก่อน</div>
+</div>
+"""
+
+FIGURES["fig-3-11-pytest"] = """
+<div class="col" style="width:1080px">
+  <div class="file">$ python -m pytest tests/ -q</div>
+  <div class="term">...................................................................... [ 18%]
+...................................................................... [ 36%]
+...................................................................... [ 55%]
+...................................................................... [ 73%]
+...................................................................... [ 91%]
+................................                                       [100%]
+
+<span class="ok">383 passed</span>, 7 warnings in 48.91s</div>
+  <div class="lbl">ชุดทดสอบครอบคลุมการถอดข้อความ การแยกรายข้อ การตัดคำ การค้นคืน ชั้นตรวจสอบคำตอบ และส่วนติดต่อผู้ใช้ ทุกการทดสอบต้องผ่านก่อนนำระบบเข้าสู่การประเมิน</div>
+</div>
+"""
+
+FIGURES["fig-3-12-testcase"] = """
+<div class="col" style="width:1080px">
+  <div class="file">docs/ksp-acceptance-tests.md &mdash; ตัวอย่างเคสทดสอบ 2 เคส</div>
+  <div class="code"><span class="k">### KSP-021</span>
+<span class="k">คำถาม</span> ครูเรียกเงินจากผู้ปกครองเพื่อแลกกับคะแนน ผิดข้อไหน
+<span class="k">ต้องอ้าง</span> ข้อ 13 ข้อบังคับฯ 2556 และ/หรือ ข้อ 7 (ข) ข้อบังคับฯ 2550
+<span class="k">ต้องมี</span> ถ้อยคำ <span class="s">"แสวงหาประโยชน์อันเป็นอามิสสินจ้าง"</span> หรือ <span class="s">"เรียกร้องผลตอบแทน"</span>
+<span class="k">ต้องไม่มี</span> อ้างเป็นความผิดทางวินัยข้าราชการ
+
+<span class="k">### KSP-040</span>
+<span class="k">คำถาม</span> ครูไปหาเสียงช่วยผู้สมัคร ส.ส. ผิดจรรยาบรรณไหม
+<span class="k">ต้องอ้าง</span> ข้อ 15 ข้อบังคับฯ 2556 และ/หรือ ข้อ 9 ข้อบังคับฯ 2550
+<span class="k">ต้องมี</span> ยกหลักการยึดมั่นในระบอบประชาธิปไตยและการเป็นแบบอย่างที่ดี
+       <span class="k">บอกว่าข้อบังคับจรรยาบรรณไม่ได้ห้ามเรื่องนี้ไว้โดยตรง</span>
+       และข้อห้ามทางการเมืองของข้าราชการครูอยู่ในกฎหมายอื่นที่ระบบนี้ไม่มี
+<span class="k">ต้องไม่มี</span> ฟันธงว่าผิดโดยอ้างข้อที่ไม่มีข้อความรองรับ</div>
+  <div class="lbl">ทุกเคสระบุสามอย่าง คือคำถาม ข้อที่ต้องอ้าง และสิ่งที่คำตอบต้องมีหรือต้องไม่มี &mdash; เขียนจากไฟล์ PDF ต้นฉบับก่อนแก้โค้ดของระบบ</div>
+</div>
+"""
+
+# ------------------------------------------------------ บทที่ 4, the results
+
+FIGURES["fig-4-1-trajectory"] = """
+<div class="col" style="width:1080px">
+  <div class="row" style="align-items:flex-end;height:330px;gap:26px;padding-left:56px">
+    ROWS
+  </div>
+  <div class="row" style="padding-left:56px;gap:26px">LABELS</div>
+  <div class="row" style="justify-content:center;gap:28px;margin-top:10px;font-size:15px">
+    <span><span style="display:inline-block;width:13px;height:13px;background:#8d2230;border-radius:3px"></span> PASS</span>
+    <span><span style="display:inline-block;width:13px;height:13px;background:#d9c7ac;border-radius:3px"></span> PARTIAL</span>
+    <span><span style="display:inline-block;width:13px;height:13px;background:#d9d0d1;border-radius:3px"></span> FAIL</span>
+    <span style="color:#2f7d4f">&mdash;&mdash; เกณฑ์ผ่าน 45 เคส</span>
+  </div>
+  <div class="lbl">แต่ละรอบประเมินครบ 61 เคสโดยผู้ประเมินที่ไม่ใช่ผู้พัฒนา &mdash; เส้นเกณฑ์กำหนดไว้ก่อนการประเมินรอบแรกและไม่ถูกลดลงเมื่อไม่ผ่าน</div>
+</div>
+"""
+
+
+def _trajectory() -> None:
+    """Fill the round bars in from the measured counts.
+
+    Written out rather than drawn with a chart library for the same reason as
+    the rest of these: Chrome already has the Thai fonts, and the numbers are
+    few enough to read straight off the report.
+    """
+    rounds = [(18, 9, 23), (19, 21, 10), (22, 19, 9), (26, 16, 8),
+              (22, 18, 10), (29, 15, 6), (28, 14, 8), (29, 6, 15)]
+    scale = 300 / 50          # px per case, 50 cases to the column
+    bars, labels = [], []
+    for i, (p, pa, f) in enumerate(rounds, 1):
+        bars.append(
+            f'<div class="col grow" style="gap:0;justify-content:flex-end;position:relative">'
+            f'<div style="position:absolute;top:{300 - 45 * scale:.0f}px;left:-56px;right:0;'
+            f'border-top:1.5px dashed #2f7d4f"></div>' if i == 1 else
+            '<div class="col grow" style="gap:0;justify-content:flex-end">')
+        bars.append(
+            f'<div style="background:#d9d0d1;height:{f * scale:.0f}px"></div>'
+            f'<div style="background:#d9c7ac;height:{pa * scale:.0f}px"></div>'
+            f'<div style="background:#8d2230;height:{p * scale:.0f}px;'
+            f'border-radius:5px 5px 0 0;position:relative">'
+            f'<span style="position:absolute;top:-24px;left:0;right:0;text-align:center;'
+            f'font-size:15px;font-weight:600;color:#8d2230">{p}</span></div></div>')
+        labels.append(f'<div class="grow center" style="font-size:15px;color:#857a7c">'
+                      f'รอบที่ {i}</div>')
+    FIGURES["fig-4-1-trajectory"] = (FIGURES["fig-4-1-trajectory"]
+                                     .replace("ROWS", "".join(bars))
+                                     .replace("LABELS", "".join(labels)))
+
+
+_trajectory()
 
 
 def screenshot_app(question: str, port: int = 8077) -> None:
