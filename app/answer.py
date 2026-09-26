@@ -53,7 +53,8 @@ from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
 from app.smalltalk import route as smalltalk_route
 from app.support import (
-    Corpus as SupportIndex, cited_rules, correct_modals, impossible_citations,
+    added_negations, Corpus as SupportIndex, cited_rules, correct_modals,
+    impossible_citations,
     misattributed_citations, modal_mismatches, points_elsewhere,
     right_sub_item, SUB_ITEM, unsupported_claims)
 from app.verify import invented_dates, unsupported_laws
@@ -139,6 +140,11 @@ SYSTEM_PROMPT = """คุณคือผู้ช่วยให้ข้อม�
    ให้บอกว่าตัวบทไม่ได้เขียนผลไว้ ดีกว่าเดาผลที่ฟังดูเข้าเรื่อง
    จุดเริ่มนับระยะเวลา ให้คัดลอกถ้อยคำของตัวบทมาตรง ๆ เช่น "นับแต่วันที่ได้รับแจ้ง"
    ห้ามเปลี่ยนเป็นวันอื่น เช่น วันที่มีคำสั่ง หรือวันที่เกิดเหตุ
+   รายการใต้หัวข้อ (ข) พฤติกรรมที่ไม่พึงประสงค์ คือพฤติกรรมที่ไม่ควรทำอยู่แล้ว
+   และส่วนใหญ่เขียนเป็นการละเว้น เช่น "ไม่ให้ความร่วมมือ..." ห้ามเติม "ต้องไม่"
+   หน้ารายการเหล่านั้น เพราะจะกลายเป็นการสั่งให้ละเว้น ซึ่งตรงข้ามกับตัวบท
+   ให้เขียนเป็นหน้าที่ เช่น "ต้องให้ความร่วมมือ..." หรือยกเป็นตัวอย่างพฤติกรรม
+   ที่ไม่พึงประสงค์ตรง ๆ
 6. ตัวบทแต่ละชิ้นมีบรรทัด "(อยู่ใน หมวด ... > ส่วนที่ ...)" กำกับ ให้อ่านก่อนตอบเสมอ
    ข้อบังคับแบบแผนพฤติกรรม 2550 เขียนจรรยาบรรณห้าด้านซ้ำสี่รอบ รอบละหนึ่งประเภทผู้ประกอบวิชาชีพ
    คือ ครู ผู้บริหารสถานศึกษา ผู้บริหารการศึกษา และศึกษานิเทศก์
@@ -629,6 +635,14 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     if len(text) >= MIN_ANSWER_CHARS and not cited_rules(text, _support_index()):
         faults.append(Fault("คำตอบไม่ได้อ้างตัวบทเลย ต้องใส่เลขในวงเล็บเหลี่ยมกำกับทุกข้อความที่เป็นสาระ",
                             blocks=False, kind="no citation"))
+
+    # The (ข) blocks list behaviours that are already the wrong thing to do, and
+    # most are phrased as a failure to act. "ต้องไม่" in front of one of those
+    # commands the failure. Measured on round eight: fires once, on the one
+    # answer all three assessors marked wrong for exactly this, and on nothing
+    # they marked right.
+    for problem in added_negations(text, _support_index()):
+        faults.append(Fault(problem, blocks=False, kind="added negation"))
 
     # พึง against ต้อง is two words compared against the text that contains
     # them. It is the only part of the lexical pass that earned a call: over

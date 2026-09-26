@@ -404,6 +404,55 @@ def correct_modals(answer: str, corpus: Corpus) -> tuple[str, list[str]]:
     return fixed, notes
 
 
+# A rule's (ข) block lists พฤติกรรมที่ไม่พึงประสงค์ -- the behaviours that are
+# already the wrong thing to do. Most are phrased as a failure to act: "ไม่ให้
+# ความร่วมมือหรือสนับสนุนกิจกรรมของชุมชน". Prefixing "ต้องไม่" to one of those
+# commands the failure. Asked what a supervisor may not do, the answer came back
+# with "ต้องไม่ให้ความร่วมมือหรือสนับสนุนกิจกรรมของชุมชน" -- the exact opposite
+# of ข้อ 24, on every bullet, and all three assessors marked it wrong.
+#
+# Reported rather than rewritten. Deleting the added ไม่ works on
+# "ต้องไม่ให้ความร่วมมือ" and breaks on "ต้องไม่รับรู้หรือไม่แสวงหาความรู้",
+# whose item carries a second negation of its own: the first ไม่ comes out and
+# the sentence is left half inverted. The writer has the rule in front of it and
+# can phrase the duty; a regex cannot.
+ADDED_NEGATION = re.compile(r"(ต้อง|พึง)ไม่(?=[\u0E01-\u0E4E])")
+NEGATED_ITEM = re.compile(r"^\s*\([ก-ฮ๐-๙0-9]{1,3}\)\s*(?:ไม่|มิได้)(.{6,})", re.DOTALL)
+# how much of the rule's own wording has to follow the prefix before this fires
+STEM_MATCH = 10
+
+
+def _negated_stems(corpus: Corpus) -> set[str]:
+    stems = set()
+    for rec in corpus.by_rule.values():
+        for block in _lettered_blocks(rec["text"], None):
+            for item in re.split(r"(?=\([๐-๙0-9]{1,3}\))", block):
+                found = NEGATED_ITEM.match(item)
+                if found:
+                    stem = found.group(1).strip()[:STEM_MATCH]
+                    if len(stem) == STEM_MATCH:
+                        stems.add(stem)
+    return stems
+
+
+def added_negations(answer: str, corpus: Corpus) -> list[str]:
+    """Places the answer negated a rule that was already negative.
+
+    Fires only where the words after the prefix are the rule's own: ten
+    characters of the item's wording, with the negation it starts with removed.
+    """
+    stems = _negated_stems(corpus)
+    notes = []
+    for match in ADDED_NEGATION.finditer(answer):
+        after = answer[match.end():match.end() + STEM_MATCH]
+        if after in stems:
+            note = (f"ตัวบทเขียนว่า “ไม่{after}…” เป็นพฤติกรรมที่ไม่พึงประสงค์อยู่แล้ว "
+                    f"คำตอบเขียนว่า “{match.group(0)}{after}…” ซึ่งกลับความหมาย")
+            if note not in notes:
+                notes.append(note)
+    return notes
+
+
 def unsupported_claims(answer: str, corpus: Corpus) -> list[str]:
     """Citations whose text does not carry the sentence they are attached to.
 

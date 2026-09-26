@@ -356,3 +356,24 @@ def test_the_duty_and_its_opposite_are_told_apart_by_weight(corpus):
                 "ก่อให้เกิดความเสียหายหรือแตกความสามัคคี")
     assert right_sub_item(sentence, _text(corpus, RULE_8),
                           ["ข", "๑"], corpus) == ["ข", "๕"]
+
+
+def test_negating_a_rule_that_was_already_negative_is_caught(corpus):
+    """ข้อ 24 (ข)(๑) of ข้อบังคับฯ 2550 makes "ไม่ให้ความร่วมมือ" the undesirable
+    behaviour, so "ต้องไม่ให้ความร่วมมือ" commands it. Asked what a supervisor
+    may not do, the answer came back that way on every bullet."""
+    from app.support import added_negations
+    wrong = ("ศึกษานิเทศก์ต้องไม่ให้ความร่วมมือหรือสนับสนุนกิจกรรมของชุมชน"
+             "ที่จัดเพื่อประโยชน์ต่อการศึกษา")
+    assert added_negations(wrong, corpus)
+    right = ("ศึกษานิเทศก์ต้องให้ความร่วมมือหรือสนับสนุนกิจกรรมของชุมชน"
+             "ที่จัดเพื่อประโยชน์ต่อการศึกษา")
+    assert added_negations(right, corpus) == []
+
+
+def test_a_prohibition_the_rule_states_as_one_is_left_alone(corpus):
+    """Most (ข) items are a failure to act, but not all: ข้อ 7 (ข)(๓) is
+    "ดูหมิ่นเหยียดหยามศิษย์", and "ต้องไม่ดูหมิ่น" is the right reading of it."""
+    from app.support import added_negations
+    assert added_negations("ครูต้องไม่ดูหมิ่นเหยียดหยามศิษย์หรือผู้รับบริการ",
+                           corpus) == []
