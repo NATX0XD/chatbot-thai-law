@@ -512,3 +512,30 @@ def test_a_prose_number_is_checked_against_what_that_rule_says():
         "การเกี่ยวข้องกับอบายมุขหรือเสพสิ่งเสพติดจนขาดสติอยู่ในข้อ 5",
         [society, vices])
     assert "ข้อ 5" in kept
+
+
+def test_an_answer_with_no_citation_at_all_is_sent_back(monkeypatch):
+    """One reached a reader that way: six true sentences about the rights of
+    someone under investigation, and nothing to look any of them up by. An
+    answer no one can check is the failure every other guard here is about."""
+    async def fake_complete(system, user):
+        return ("ผู้ถูกกล่าวหามีสิทธิได้รับแจ้งสิทธิและหน้าที่ก่อนการสอบสวน "
+                "มีสิทธินำทนายความหรือที่ปรึกษาเข้าร่วมฟังการสอบสวนได้ "
+                "มีสิทธิได้รับทราบข้อเท็จจริงอย่างเพียงพอ "
+                "มีโอกาสโต้แย้งและแสดงพยานหลักฐานของตน "
+                "รวมถึงมีสิทธิขอตรวจดูเอกสารที่จำเป็นต้องรู้เพื่อการโต้แย้ง")
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert any("ไม่ได้อ้างตัวบท" in f for f in a.faults)
+
+
+def test_a_refusal_is_not_expected_to_cite_anything(monkeypatch):
+    """Short honest "the rules do not say" has nothing for a citation to hang
+    on, and asking for one would send every one of them through a repair."""
+    async def fake_complete(system, user):
+        return "ตัวบทไม่ได้เขียนเรื่องนี้ไว้ครับ"
+
+    monkeypatch.setattr(answer_mod, "complete", fake_complete)
+    a = run(answer_question(ANSWERABLE))
+    assert not any("ไม่ได้อ้างตัวบท" in f for f in a.faults)

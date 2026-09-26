@@ -386,6 +386,12 @@ def build_context(hits: list[Hit]) -> str:
 # below passes such an answer, because it cites nothing and claims nothing.
 DEGENERATE_RUN = re.compile(r"(.{2,40}?)\1{9,}")
 
+# Below this an answer is a refusal or a one-line "the rules do not say", and
+# there is nothing for a citation to hang on. Measured in characters, because
+# Thai puts no spaces between words: splitting the six-sentence answer that
+# prompted this check on whitespace counted five "words".
+MIN_ANSWER_CHARS = 180
+
 
 def looks_degenerate(text: str) -> bool:
     return bool(DEGENERATE_RUN.search(text))
@@ -609,6 +615,15 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     # the number is real, the instrument beside it is not the one that has it
     for problem in misattributed_citations(text, _support_index()):
         faults.append(Fault(problem, blocks=False, kind="misattributed"))
+
+    # An answer with no citation in it cannot be checked by anyone -- not by the
+    # guards here, not by the reader, not by an assessor. One reached a reader
+    # that way: six sentences about the rights of someone under investigation,
+    # every one of them true, and nothing to look them up by. The writer is
+    # asked again rather than refused, because the content was right.
+    if len(text) >= MIN_ANSWER_CHARS and not cited_rules(text, _support_index()):
+        faults.append(Fault("คำตอบไม่ได้อ้างตัวบทเลย ต้องใส่เลขในวงเล็บเหลี่ยมกำกับทุกข้อความที่เป็นสาระ",
+                            blocks=False, kind="no citation"))
 
     # พึง against ต้อง is two words compared against the text that contains
     # them. It is the only part of the lexical pass that earned a call: over
