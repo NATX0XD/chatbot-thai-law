@@ -2,6 +2,10 @@
 # them are read at serving time
 data/raw/
 data/processed/*
+# every COPY of data/processed/ in the Dockerfile needs a line here, or the file
+# is not in the build context and the build stops at "file not found". This list
+# and the COPY list are one thing in two places; change them together.
+!data/processed/corpus_ksp.jsonl
 !data/processed/corpus.jsonl
 data/index/*
 !data/index/vectors.npy
