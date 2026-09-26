@@ -251,6 +251,26 @@ def _width_of(text: str) -> float:
     return thai * THAI_CHAR + (len(text) - thai) * LATIN_CHAR
 
 
+BIBLIOGRAPHY = ("เอกสารอ้างอิง", "บรรณานุกรม")
+
+
+def _ends_a_chapter(para) -> bool:
+    """Whether this paragraph is where the chapter before it stops.
+
+    Headings are the obvious boundary. The bibliography has to be named
+    separately because the template styles it Subtitle, not a heading -- so the
+    span of บทที่ 3 ran straight through it, write_chapter deleted it along with
+    the old chapter body, and append_references then found nowhere to put
+    entries [16]-[25] and skipped them with only a printed line to say so. The
+    file shipped with [22] cited in ตารางที่ 2-2 and no reference list at all.
+    """
+    style = para.style.name
+    if style.startswith("Heading") and style != "Heading 2":
+        return True
+    text = para.text.strip()
+    return len(text) < 40 and any(name in text for name in BIBLIOGRAPHY)
+
+
 def chapter_span(doc, title: str):
     """(heading, the elements after it that belong to that chapter).
 
@@ -261,8 +281,7 @@ def chapter_span(doc, title: str):
     start = next(i for i, p in enumerate(paragraphs)
                  if p.style.name == "Heading 1" and title in p.text)
     end = next((i for i in range(start + 1, len(paragraphs))
-                if paragraphs[i].style.name.startswith("Heading")
-                and paragraphs[i].style.name != "Heading 2"), len(paragraphs))
+                if _ends_a_chapter(paragraphs[i])), len(paragraphs))
     return paragraphs[start], paragraphs[start + 1:end]
 
 
@@ -353,8 +372,10 @@ def append_references(doc) -> None:
     start = next((i for i, p in enumerate(paragraphs)
                   if "เอกสารอ้างอิง" in p.text and len(p.text) < 40), None)
     if start is None:
-        print("  (no bibliography found -- new references not appended)")
-        return
+        # printing and carrying on is how a build shipped with [16]-[25] cited
+        # in the text and absent from the back of the book.
+        raise SystemExit("เอกสารอ้างอิง not found in the document -- "
+                         "references would be silently dropped")
     last = paragraphs[-1]
     for i in range(len(paragraphs) - 1, start, -1):
         if paragraphs[i].text.strip():
