@@ -21,6 +21,7 @@ import re
 
 import httpx
 
+from app import monitor
 from app.answer import answer_question
 from app.config import settings
 # one wording for the welcome text, shared with the 'สวัสดี' path
@@ -159,14 +160,30 @@ async def handle_event(event: dict) -> None:
             return
         log.info("GROUP %s | %r", "mention" if mentioned else "keyword", text[:60])
 
+    # One line per inbound message, whatever the source. Before this the only
+    # message that reached the log was a group one, so a one-to-one conversation
+    # left no trace at all and there was no way to tell a quiet bot from a broken
+    # one. The userId is hashed here for the same reason it is in monitor.
+    who = monitor.short_id(source.get("userId", ""))
+    log.info("IN  %s %s | %r", "group" if in_group else "user", who, text[:80])
+    entry = monitor.record(source="group" if in_group else "user",
+                           user=source.get("userId", ""), text=text)
+
     if target:
         await show_loading(target)
 
     try:
         answer = await answer_question(text)
         body = answer.for_line_messages()
-    except Exception:
+        monitor.finish(entry, answer=answer.text, in_scope=answer.in_scope,
+                       faults=answer.faults, repair=answer.repair,
+                       error=answer.error)
+        log.info("OUT %s %s | in_scope=%s faults=%s %.1fs | %r",
+                 "group" if in_group else "user", who, answer.in_scope,
+                 answer.faults or "-", entry["answered"], answer.text[:120])
+    except Exception as exc:
         log.exception("failed to answer %r", text[:80])
+        monitor.finish(entry, error=repr(exc)[:200])
         body = "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองถามใหม่อีกครั้งได้เลย"
 
     sent = await reply(reply_token, body) if reply_token else False

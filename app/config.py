@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # on older webhook payloads that lack the isSelf flag.
     line_bot_user_id: str = ""
 
+    # --- live monitoring ---
+    # Shared secret for GET /recent, which returns the questions people have just
+    # asked. Blank turns the endpoint off entirely rather than leaving it open:
+    # the service is on the public internet and those are other people's messages.
+    monitor_token: str = ""
+
     # --- embeddings ---
     # "local"  sentence-transformers on CPU; what the index is built with
     # "api"    the same checkpoint hosted behind an OpenAI-compatible endpoint,

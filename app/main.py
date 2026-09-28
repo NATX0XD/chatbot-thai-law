@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app import line_bot
+from app import line_bot, monitor
 from app.answer import answer_question
 from app.config import BASE_DIR, settings
 from app.retriever import get_retriever
@@ -103,7 +103,12 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> dict:
+    # The web page and LINE share one buffer, so /recent shows the whole of what
+    # the bot is being asked, not just the half that arrived over LINE.
+    entry = monitor.record(source="web", user="", text=req.question)
     answer = await answer_question(req.question)
+    monitor.finish(entry, answer=answer.text, in_scope=answer.in_scope,
+                   faults=answer.faults, repair=answer.repair, error=answer.error)
     return {
         "answer": answer.text,
         "in_scope": answer.in_scope,
@@ -121,6 +126,20 @@ async def chat(req: ChatRequest) -> dict:
             for h in answer.hits
         ],
     }
+
+
+@app.get("/recent")
+async def recent(token: str = "", limit: int = 50) -> dict:
+    """What people have just asked, newest first. Poll this to watch the bot live.
+
+    Off unless MONITOR_TOKEN is set, and 404 rather than 403 when it is missing or
+    wrong: an endpoint that answers "wrong token" tells a stranger that questions
+    are there to be read.
+    """
+    if not settings.monitor_token or token != settings.monitor_token:
+        raise HTTPException(404, "Not Found")
+    return {"summary": monitor.summary(),
+            "events": monitor.recent(max(1, min(limit, monitor.CAPACITY)))}
 
 
 @app.get("/search")

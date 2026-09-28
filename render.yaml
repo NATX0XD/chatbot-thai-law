@@ -36,3 +36,7 @@ services:
         sync: false
       - key: LINE_BOT_USER_ID
         sync: false
+      # opens GET /recent, which shows who asked what and what the bot replied.
+      # Leave it unset and the endpoint stays a 404.
+      - key: MONITOR_TOKEN
+        sync: false

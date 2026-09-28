@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "thai-law-bot — จรรยาบรรณวิชาชีพครู",
+    "description": "เรียก API ของแชตบอตจรรยาบรรณวิชาชีพครู\n\nตั้งค่า baseUrl ที่ตัวแปรของ collection\n- เซิร์ฟเวอร์จริง https://thai-law-bot-c5zo.onrender.com\n- เครื่องตัวเอง http://127.0.0.1:8077 (รัน .venv/bin/uvicorn app.main:app --port 8077 ก่อน)\n\nเซิร์ฟเวอร์จริงอยู่บนแพ็กฟรีของ Render จะหลับหลังไม่มีคนเรียก 15 นาที ครั้งแรกหลังหลับจะรอประมาณ 1 นาที ยิง /health ซ้ำจนได้ 200 ก่อนแล้วค่อยยิงข้ออื่น\n\n/webhook ไม่ได้ใส่ไว้ เพราะต้องมีลายเซ็น HMAC ของ LINE ในเฮดเดอร์ X-Line-Signature ยิงจาก Postman ตรง ๆ จะถูกปฏิเสธ",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://thai-law-bot-c5zo.onrender.com",
+      "type": "string"
+    },
+    {
+      "key": "monitorToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "recent — ดูว่ามีใครส่งข้อความเข้ามาบ้าง",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/recent?token={{monitorToken}}&limit=50",
+          "host": ["{{baseUrl}}"],
+          "path": ["recent"],
+          "query": [
+            { "key": "token", "value": "{{monitorToken}}" },
+            { "key": "limit", "value": "50" }
+          ]
+        },
+        "description": "ใครถามอะไร แล้วบอทตอบอะไร ทั้งจาก LINE และจากหน้าเว็บ เรียงใหม่สุดก่อน\n\nต้องตั้ง MONITOR_TOKEN ที่ Render ก่อน แล้วเอาค่าเดียวกันใส่ตัวแปร monitorToken ของ collection นี้ ถ้าไม่ตั้งหรือใส่ผิดจะได้ 404\n\nแต่ละรายการมี\n- at  เวลาที่ข้อความเข้ามา\n- who  คนที่ 1 / คนที่ 2 / คนที่ 3 ... ไล่ตามลำดับคนที่ทักเข้ามาก่อน คนเดิมได้เลขเดิมตลอด ส่วนที่ถามผ่านหน้าเว็บขึ้นว่า หน้าเว็บ\n- source  user (แชตส่วนตัว) / group (ในกลุ่ม) / web (หน้าเว็บ)\n- user  รหัสย่อ 8 ตัวของผู้ส่ง ไม่ใช่ LINE userId จริง\n- question  คำถามที่ส่งมา\n- answer  คำตอบที่บอทตอบกลับไป\n- answered  ใช้เวลาตอบกี่วินาที เป็น null แปลว่ากำลังตอบอยู่ ยังไม่เสร็จ\n- in_scope  false คือบอทปฏิเสธเพราะคำถามอยู่นอกขอบเขต\n- faults  สิ่งที่ตัวตรวจจับได้จากร่างแรก\n- repair  บอทเขียนคำตอบใหม่หรือไม่\n\nเก็บไว้ในหน่วยความจำ 100 รายการล่าสุด รีสตาร์ตหรือ deploy ใหม่แล้วหาย ไม่ได้เขียนลงดิสก์\n\nดูแบบต่อเนื่อง: Postman > Run collection > เลือกเฉพาะข้อนี้ > Iterations สูง ๆ, Delay 5000 ms"
+      }
+    },
+    {
+      "name": "health — เช็กว่าตื่นหรือยัง",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "ตอบ 200 แปลว่าโหลดดัชนีเสร็จ พร้อมรับคำถาม ยิงตัวนี้ก่อนเสมอ"
+      }
+    },
+    {
+      "name": "stats — ขนาดคลังและค่าที่ตั้งไว้",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["stats"]
+        },
+        "description": "จำนวนระเบียนในคลัง และค่าพารามิเตอร์ที่ระบบใช้อยู่"
+      }
+    },
+    {
+      "name": "chat — ถามคำถาม",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"จรรยาบรรณต่อผู้รับบริการของครูมีอะไรบ้าง\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/chat",
+          "host": ["{{baseUrl}}"],
+          "path": ["chat"]
+        },
+        "description": "ตัวหลัก ส่ง question ความยาว 1-1000 ตัวอักษร\n\nที่ได้กลับมา\n- answer  คำตอบพร้อมการอ้างอิง\n- in_scope  false แปลว่าคำถามอยู่นอกขอบเขต ระบบปฏิเสธ\n- faults  สิ่งที่ตัวตรวจจับได้จากร่างแรก\n- repair  ระบบเขียนใหม่หรือไม่\n- sources  ตัวบทที่ค้นเจอ พร้อมคะแนน dense/bm25/rrf และอันดับของแต่ละตัว\n\nคำตอบใช้เวลาหลายวินาที เพราะต้องเรียกโมเดลภาษา และอาจเรียกซ้ำอีกรอบถ้าตัวตรวจจับข้อผิด"
+      }
+    },
+    {
+      "name": "chat — คำถามภาษาพูด",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"ครูด่านักเรียนหน้าชั้นผิดจรรยาบรรณไหม\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/chat",
+          "host": ["{{baseUrl}}"],
+          "path": ["chat"]
+        },
+        "description": "คำถามที่ไม่ได้ใช้ศัพท์ตามตัวบท ใช้ดูว่าตัวค้นคืนจับได้ไหม"
+      }
+    },
+    {
+      "name": "chat — คำถามนอกขอบเขต (ต้องถูกปฏิเสธ)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"ถูกเลิกจ้าง ได้ค่าชดเชยเท่าไหร่\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/chat",
+          "host": ["{{baseUrl}}"],
+          "path": ["chat"]
+        },
+        "description": "กฎหมายแรงงานไม่อยู่ในคลัง ต้องได้ in_scope = false และคำตอบต้องเป็นการปฏิเสธ ไม่ใช่การเดา"
+      }
+    },
+    {
+      "name": "search — ค้นอย่างเดียว ไม่เรียกโมเดล",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=จรรยาบรรณต่อตนเอง&k=6",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [
+            { "key": "q", "value": "จรรยาบรรณต่อตนเอง" },
+            { "key": "k", "value": "6", "description": "จำนวนผลลัพธ์ ค่าตั้งต้น 6" }
+          ]
+        },
+        "description": "ค้นคืนล้วน ไม่เรียกโมเดลภาษา ตอบเร็วและไม่เสียโควตา ใช้ดูว่าตัวบทที่ต้องการขึ้นมาในอันดับไหน\n\nที่ได้กลับมา max_dense กับ max_bm25 คือคะแนนสูงสุดที่ใช้ตัดสินว่าอยู่ในขอบเขตหรือไม่ และ exact_section บอกว่าจับเลขข้อจากคำถามได้ตรง ๆ หรือเปล่า"
+      }
+    }
+  ]
+}
