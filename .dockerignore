@@ -7,10 +7,14 @@ data/processed/*
 # and the COPY list are one thing in two places; change them together.
 !data/processed/corpus_ksp.jsonl
 !data/processed/corpus.jsonl
+!data/processed/corpus_articles.jsonl
 data/index/*
 !data/index/vectors.npy
 !data/index/bm25_compact.npz
 !data/index/bm25_vocab.json
+!data/index/articles_vectors.npy
+!data/index/articles_bm25_compact.npz
+!data/index/articles_bm25_vocab.json
 
 .venv/
 .git/

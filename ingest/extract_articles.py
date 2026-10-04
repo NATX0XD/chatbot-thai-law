@@ -38,6 +38,22 @@ from app.config import PROCESSED_DIR, RAW_DIR  # noqa: E402
 
 SOURCE_PATH = os.path.join(RAW_DIR, "articles", "teacher-ethics.md")
 OUT_PATH = os.path.join(PROCESSED_DIR, "corpus_articles.jsonl")
+SOURCES_PATH = os.path.join(PROCESSED_DIR, "corpus_articles_SOURCES.md")
+
+SOURCES_HEAD = """# ที่มาของบทความใน corpus_articles.jsonl
+
+ไฟล์นี้สร้างโดย `python -m ingest.extract_articles` ห้ามแก้ด้วยมือ
+
+`corpus_articles.jsonl` คือข้อความจากบทความวารสารวิชาการ {count} เรื่องข้างล่างนี้
+นำมาใช้เพื่อการศึกษา เป็นคลังข้อมูลของแชตบอตในปริญญานิพนธ์ ไม่ได้ใช้เพื่อการค้า
+ลิขสิทธิ์ของบทความเป็นของผู้เขียนและวารสารต้นฉบับ ทุกคำตอบที่บอทสรุปจากบทความ
+ระบุชื่อผู้เขียนและปีที่พิมพ์กำกับไว้ ผู้อ่านควรอ่านและอ้างอิงจากบทความฉบับเต็มตามลิงก์
+
+เจ้าของบทความที่ไม่ประสงค์ให้ใช้ แจ้งผ่าน Issues ของ repository นี้ได้ จะนำออกให้
+
+| รหัส | บทความ | ผู้เขียน | วารสาร | ลิงก์ |
+|:---|:---|:---|:---|:---|
+"""
 
 MAX_CHUNK = 1000
 MIN_PARAGRAPH = 60
@@ -49,6 +65,7 @@ ARTICLE = re.compile(r"^## \[(G\d+)\]\s+(.+?)\s*$")
 SOURCE_LINE = re.compile(r"^แหล่งที่มา:\s*(.+)$")
 REFERENCES = re.compile(r"^(?:เอกสารอ้างอิง|บรรณานุกรม|references?)\s*$", re.I)
 URL = re.compile(r"https?://\S+")
+EMAIL = re.compile(r"(?:\*\s*)?(?:อีเมล|E-?mail)?\s*:?\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)+", re.I)
 BUDDHIST_YEAR = re.compile(r"25[0-9]{2}")
 MARKDOWN_ESCAPE = re.compile(r"\\([._*\-\[\]()#+!|>~`])")
 # whole Thai block, not ก-ฮ: the leading vowels เ แ โ ใ ไ sit outside that range
@@ -66,7 +83,9 @@ HEADINGS = ("บทคัดย่อ", "บทนำ", "วัตถุปร�
 
 
 def unescape(text: str) -> str:
-    return MARKDOWN_ESCAPE.sub(r"\1", text).strip()
+    # an author's address is printed in the journal, and has no business being
+    # copied into a public repository or handed to a model
+    return EMAIL.sub("", MARKDOWN_ESCAPE.sub(r"\1", text)).strip()
 
 
 def thai_share(text: str) -> float:
@@ -237,7 +256,14 @@ def main() -> None:
         chars = sum(r["n_chars"] for r in group)
         print(f"{key}  {len(group):3d} ชิ้น {chars:7,d} ตัวอักษร  "
               f"{group[0]['short']}  {group[0]['title'][:50]}")
+    with open(SOURCES_PATH, "w", encoding="utf-8") as handle:
+        handle.write(SOURCES_HEAD.format(count=len(per)))
+        for key, group in per.items():
+            first = group[0]
+            handle.write(f"| {key} | {first['title']} | {first['authors']} | "
+                         f"{first['journal']} | {first['source_url']} |\n")
     print(f"\n{len(per)} บทความ {len(rows):,} ชิ้น -> {OUT_PATH}")
+    print(f"ที่มา -> {SOURCES_PATH}")
     print("ต่อไป: python -m ingest.build_article_index")
 
 

@@ -59,7 +59,7 @@ repo นี้เป็น public
 | `data/processed/corpus_ksp.jsonl` | `python -m ingest.extract_ksp` |
 | `data/processed/corpus_ksp_audit.md` | `python -m ingest.audit_ksp` |
 | `data/index/*` | `python -m ingest.build_index` |
-| `data/processed/corpus_articles.jsonl` | `python -m ingest.extract_articles` |
+| `data/processed/corpus_articles.jsonl` / `corpus_articles_SOURCES.md` | `python -m ingest.extract_articles` |
 | `data/index/articles_*` | `python -m ingest.build_article_index` |
 
 แก้ที่สคริปต์ แล้วสร้างใหม่ เสมอ
@@ -75,7 +75,7 @@ repo นี้เป็น public
 .venv/bin/python -m pytest -q
 ```
 
-ต้องผ่านครบ ตอนนี้ 448 ตัว เทสต์ตกแม้ตัวเดียวคือยังไม่ commit
+ต้องผ่านครบ ตอนนี้ 449 ตัว เทสต์ตกแม้ตัวเดียวคือยังไม่ commit
 
 push ขึ้น `main` แล้ว Render จะ deploy เองอัตโนมัติ (`autoDeployTrigger: commit`)
 แปลว่า **push ผิด = เซิร์ฟเวอร์จริงพังทันที** ไม่มีขั้นกลาง

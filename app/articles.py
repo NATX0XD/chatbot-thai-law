@@ -220,12 +220,11 @@ def available() -> bool:
 
 
 def get_index() -> Optional[ArticleIndex]:
-    """The article index, or None when it has not been built on this machine.
+    """The article index, or None when its files are not there.
 
-    Absent is a state, not a fault: the files are not in the repository yet, so
-    a server built from git runs on the rules alone. It is logged once, loudly,
-    so nobody reads the missing answers as a bug. Present but inconsistent is a
-    fault, and raises.
+    Absent is a state, not a fault: a checkout with the articles taken out
+    still serves the rules. It is logged once, loudly, so nobody reads the
+    missing answers as a bug. Present but inconsistent is a fault, and raises.
     """
     global _index, _checked
     if not _checked:

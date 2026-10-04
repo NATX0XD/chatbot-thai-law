@@ -31,6 +31,12 @@ COPY data/processed/corpus.jsonl        data/processed/corpus.jsonl
 COPY data/index/vectors.npy             data/index/vectors.npy
 COPY data/index/bm25_compact.npz        data/index/bm25_compact.npz
 COPY data/index/bm25_vocab.json         data/index/bm25_vocab.json
+# the journal articles and their index: 3 MB, read when a question is about
+# what a study found rather than what a regulation requires
+COPY data/processed/corpus_articles.jsonl      data/processed/corpus_articles.jsonl
+COPY data/index/articles_vectors.npy           data/index/articles_vectors.npy
+COPY data/index/articles_bm25_compact.npz      data/index/articles_bm25_compact.npz
+COPY data/index/articles_bm25_vocab.json       data/index/articles_bm25_vocab.json
 
 # the remote embedder is the whole point of this image; leaving the default
 # would make it try to import torch at the first question

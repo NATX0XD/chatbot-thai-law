@@ -248,3 +248,7 @@ def test_a_line_from_memory_is_removed_and_a_copied_one_is_kept():
     text, dropped = articles.drop_ungrounded(draft, [passage])
     assert "สมถะ" not in text and len(dropped) == 1
     assert "• สังคหวัตถุ 4" in text and "[1]" in text
+
+
+def test_an_author_email_is_not_kept():
+    assert "@" not in ex.unescape("มหาวิทยาลัยราชภัฏรำไพพรรณี * อีเมล: someone77@gmail.com")
