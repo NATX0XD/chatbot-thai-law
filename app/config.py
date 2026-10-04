@@ -184,6 +184,28 @@ class Settings(BaseSettings):
     def corpus_path(self) -> str:
         return os.path.join(PROCESSED_DIR, self.corpus_file)
 
+    # The journal articles, a second corpus the bot falls back on when the rules
+    # have nothing to say. Kept in its own files so the two never share a
+    # ranking; see ingest/extract_articles.py. Absent files mean the fallback is
+    # off, not that the service is broken.
+    articles_file: str = "corpus_articles.jsonl"
+
+    @property
+    def articles_path(self) -> str:
+        return os.path.join(PROCESSED_DIR, self.articles_file)
+
+    @property
+    def articles_vectors_path(self) -> str:
+        return os.path.join(INDEX_DIR, "articles_vectors.npy")
+
+    @property
+    def articles_bm25_path(self) -> str:
+        return os.path.join(INDEX_DIR, "articles_bm25_compact.npz")
+
+    @property
+    def articles_vocab_path(self) -> str:
+        return os.path.join(INDEX_DIR, "articles_bm25_vocab.json")
+
     @property
     def vectors_path(self) -> str:
         return os.path.join(INDEX_DIR, "vectors.npy")

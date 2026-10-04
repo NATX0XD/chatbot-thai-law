@@ -37,7 +37,13 @@ TF_MAX = 255
 def main():
     with open(settings.bm25_path, "rb") as f:
         bm = pickle.load(f)
+    old = os.path.getsize(settings.bm25_path) / 1e6
+    new = write_compact(bm, settings.bm25_compact_path, settings.bm25_vocab_path)
+    print(f"{old:.1f} MB pickle -> {new:.1f} MB compact")
 
+
+def write_compact(bm, out: str, vocab_out: str) -> float:
+    """Write a fitted BM25Okapi as flat arrays; returns the size in MB."""
     terms = sorted(bm.idf)
     term_id = {t: i for i, t in enumerate(terms)}
     n_terms, n_docs = len(terms), bm.corpus_size
@@ -67,16 +73,13 @@ def main():
     doc_len = np.asarray(bm.doc_len, dtype=np.float32)
     norm = (bm.k1 * (1 - bm.b + bm.b * doc_len / bm.avgdl)).astype(np.float32)
 
-    out = settings.bm25_compact_path
     np.savez(out, ptr=ptr, docs=docs, tf=tf, idf=idf, norm=norm,
              k1=np.float32(bm.k1), n_docs=np.int64(n_docs))
-    with open(settings.bm25_vocab_path, "w", encoding="utf-8") as f:
+    with open(vocab_out, "w", encoding="utf-8") as f:
         json.dump(terms, f, ensure_ascii=False)
 
-    old = os.path.getsize(settings.bm25_path) / 1e6
-    new = (os.path.getsize(out) + os.path.getsize(settings.bm25_vocab_path)) / 1e6
     print(f"docs {n_docs:,}  terms {n_terms:,}  postings {nnz:,}")
-    print(f"{old:.1f} MB pickle -> {new:.1f} MB compact")
+    return (os.path.getsize(out) + os.path.getsize(vocab_out)) / 1e6
 
 
 if __name__ == "__main__":

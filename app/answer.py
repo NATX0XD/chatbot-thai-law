@@ -45,6 +45,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from app import articles
 from app.config import settings
 from app.coverage import answer_beyond_corpus as find_gap_in_answer, find_gap
 from app.flex import answer_message
@@ -217,13 +218,21 @@ class Answer:
     # diff against the previous run, which is how round seven had to be read.
     faults: list[str] = field(default_factory=list)
     repair: str = "not attempted"   # accepted | rejected | not attempted
+    # "rules" or "articles". An answer written from a journal article is not an
+    # answer about what the regulations require, and every reader of it -- the
+    # person in the chat, the API, the monitor -- has to be able to tell.
+    source: str = "rules"
+
+    @property
+    def disclaimer(self) -> str:
+        return articles.DISCLAIMER if self.source == "articles" else DISCLAIMER
 
     def for_line(self) -> str:
         """Plain-text form, used as a fallback and by callers that want one string."""
         body = self.text.strip()
         if len(body) > settings.max_answer_chars:
             body = body[:settings.max_answer_chars].rstrip() + " …"
-        return f"{body}\n\n{DISCLAIMER}"
+        return f"{body}\n\n{self.disclaimer}"
 
     def for_line_messages(self) -> list:
         """Text first, then the same answer as a card.
@@ -237,7 +246,7 @@ class Answer:
         body = self.text.strip()
         if len(body) > settings.max_answer_chars:
             body = body[:settings.max_answer_chars].rstrip() + " …"
-        messages = [{"type": "text", "text": f"{body}\n\n{DISCLAIMER}"}]
+        messages = [{"type": "text", "text": f"{body}\n\n{self.disclaimer}"}]
         if self.citations:
             messages.append(answer_message(body, self.citations,
                                            in_scope=self.in_scope))
@@ -685,6 +694,17 @@ async def answer_question(question: str) -> Answer:
     # takes long enough to stall every other request if run on the event loop
     result = await asyncio.to_thread(get_retriever().search, question)
     hits = result.hits
+
+    # The journal articles, when the question is theirs rather than the rules'.
+    # Asked before the gate below because these questions pass it: all of them
+    # are about a teacher's ethics, and so is every regulation. A question that
+    # is not routed there carries on below, untouched.
+    passages = await asyncio.to_thread(
+        articles.route, question, result, get_retriever()._encode,
+        get_retriever().vocabulary)
+    if passages:
+        return await articles.write(question, passages)
+
     # layer 2: nothing in the corpus is close enough to the question
     if not result.in_scope:
         log.info("REFUSED low-score dense=%.4f bm25=%.1f | %r",

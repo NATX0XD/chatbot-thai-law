@@ -157,6 +157,11 @@ class Retriever:
                     f"index/corpus mismatch: {len(self.vectors)} vectors vs "
                     f"{len(self.corpus)} chunks. Re-run ingest.build_index.")
 
+    @property
+    def vocabulary(self):
+        """Every word the corpus contains, as the tokenizer cuts them."""
+        return getattr(self.bm25, "term_id", None) or self.bm25.idf
+
     # -- lazy so that BM25-only callers (and tests) never pay the model load --
     def _encode(self, query: str) -> np.ndarray:
         if self.embedder is None:

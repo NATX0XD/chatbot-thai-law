@@ -141,6 +141,7 @@ SUBITEM = re.compile(r"^\s*\([ก-ฮ๐-๙0-9]+\)")
 STRUCTURE = re.compile(r"^\s*(?:ข้อ|มาตรา|หมวด|ส่วนที่|ภาค|ลักษณะ)\s")
 DUTY = re.compile(r"^จรรยาบรรณ(ต่อ.+?)\s*$")
 THAI_CONSONANT = re.compile(r"[ก-ฮ]")
+YEAR_LINE = re.compile(r"^\s*[๐-๙0-9]{4}\s*$")
 
 
 def is_noise(line: str) -> bool:
@@ -164,9 +165,17 @@ def body_lines(text: str):
     cut = TAIL.search(text)
     if cut:
         text = text[: cut.start()]
+    previous = ""
     for line in text.split("\n"):
-        if FURNITURE.match(line) or is_noise(line):
+        if FURNITURE.match(line):
             continue
+        # A title that wraps right after "พ.ศ." leaves its year alone on the next
+        # line, and four digits with no letters look exactly like OCR noise.
+        # ข้อ 3 ของข้อบังคับฯ 2556 lost "๒๕๔๘" that way and named no regulation.
+        wrapped_year = YEAR_LINE.match(line) and previous.rstrip().endswith("พ.ศ.")
+        if is_noise(line) and not wrapped_year:
+            continue
+        previous = line
         yield line
 
 

@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import line_bot, monitor
+from app import articles
 from app.answer import answer_question
 from app.config import BASE_DIR, settings
 from app.retriever import get_retriever
@@ -56,6 +57,8 @@ async def health() -> dict:
         "status": "ok",
         "chunks": len(r.corpus),
         "dense_index": r.vectors is not None,
+        # the journal-article fallback; false means rules only
+        "articles": articles.get_index() is not None,
         "llm_configured": bool(settings.typhoon_api_key),
         "line_configured": bool(settings.line_channel_secret
                                 and settings.line_channel_access_token),
@@ -112,6 +115,8 @@ async def chat(req: ChatRequest) -> dict:
     return {
         "answer": answer.text,
         "in_scope": answer.in_scope,
+        # "rules" or "articles": which corpus the answer was written from
+        "source": answer.source,
         "error": answer.error,
         # what the guards found on the first draft, and whether the rewrite was
         # accepted. For reading acceptance runs without diffing against the
