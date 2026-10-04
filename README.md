@@ -201,14 +201,19 @@ LINE คาดหวังให้ webhook ตอบ 200 ภายในไม�
 | `GET /health` | สถานะดัชนีและคีย์ที่ตั้งค่าไว้ |
 | `POST /chat` | `{"question": "..."}` -> คำตอบ + มาตราที่ใช้ตอบ |
 | `GET /search?q=...` | ค้นอย่างเดียว ไม่เรียก LLM — ใช้จูน `MIN_DENSE_SIM` โดยไม่เปลืองโควตา |
+| `GET /stats` | ขนาดคลังและค่าพารามิเตอร์ที่ใช้อยู่ |
+| `GET /recent?token=...` | ใครถามอะไร บอทตอบอะไร ปิดอยู่ถ้าไม่ตั้ง `MONITOR_TOKEN` |
 | `POST /webhook` | LINE (ตรวจลายเซ็นก่อนเสมอ) |
+
+ยิงจาก Postman ได้ด้วยไฟล์ `postman/thai-law-bot.postman_collection.json` — Import เข้า Postman
+แล้วตั้งตัวแปร `baseUrl` กับ `monitorToken` วิธีใช้อยู่ใน `CLAUDE.md` หัวข้อ 5
 
 ---
 
 ## ทดสอบ
 
 ```bash
-.venv/bin/python -m pytest tests -q          # 342 เทสต์
+.venv/bin/python -m pytest tests -q          # 421 เทสต์
 ```
 
 | ไฟล์ | ทดสอบอะไร |
