@@ -8,6 +8,8 @@ data/processed/*
 !data/processed/corpus_ksp.jsonl
 !data/processed/corpus.jsonl
 !data/processed/corpus_articles.jsonl
+!data/processed/corpus_network.jsonl
+!data/processed/figures_network.json
 data/index/*
 !data/index/vectors.npy
 !data/index/bm25_compact.npz
@@ -15,6 +17,9 @@ data/index/*
 !data/index/articles_vectors.npy
 !data/index/articles_bm25_compact.npz
 !data/index/articles_bm25_vocab.json
+!data/index/network_vectors.npy
+!data/index/network_bm25_compact.npz
+!data/index/network_bm25_vocab.json
 
 .venv/
 .git/

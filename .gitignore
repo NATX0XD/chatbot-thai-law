@@ -32,3 +32,13 @@ data/processed/*.csv
 
 # bm25.pkl เป็นของ build เท่านั้น 31 MB และกินแรม 202 MB ตอนโหลด
 data/index/bm25.pkl
+
+# คลังหนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้นและดัชนีของมัน คือชุดข้อมูลที่บอทเสิร์ฟ
+# อยู่ตอนนี้ (DATASET=network) Render build จาก git จึงต้องอยู่ใน repo
+# ลิขสิทธิ์เป็นของบริษัท ซีเอ็ดยูเคชั่น จำกัด (มหาชน) ใช้ที่นี่เพื่อการศึกษา
+# ที่มาอยู่ใน data/processed/corpus_network_SOURCES.md
+# รูปที่ตัดจากหนังสืออยู่ใน web/figures/ ซึ่งไม่ได้ถูกกันไว้
+!data/processed/corpus_network.jsonl
+!data/index/network_vectors.npy
+!data/index/network_bm25_compact.npz
+!data/index/network_bm25_vocab.json

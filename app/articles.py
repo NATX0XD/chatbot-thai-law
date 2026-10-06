@@ -142,6 +142,8 @@ class ArticleHit(Hit):
 class ArticleIndex:
     """The article corpus with its vectors and its BM25 postings."""
 
+    hit_class = None    # set below the class; app/book.py reuses search()
+
     def __init__(self):
         self.corpus = open_corpus(settings.articles_path)
         self.vectors = np.load(settings.articles_vectors_path, mmap_mode="r")
@@ -184,7 +186,7 @@ class ArticleIndex:
         d_rank = {idx: r for r, idx in enumerate(dense)}
         b_rank = {idx: r for r, idx in enumerate(sparse)}
         order = sorted(fused, key=lambda i: -fused[i])[:top_k]
-        hits = [ArticleHit(rec=self.corpus[i], rrf=fused[i],
+        hits = [self.hit_class(rec=self.corpus[i], rrf=fused[i],
                            dense_score=float(sims[i]), bm25_score=float(scores[i]),
                            dense_rank=d_rank.get(i), bm25_rank=b_rank.get(i))
                 for i in order]
@@ -208,6 +210,8 @@ class ArticleIndex:
                  for i in self.abstracts.get(hits[0].rec["sysid"], [])[:UNLABELLED_ABSTRACT]]
         return hits + [h for h in extra if h.rec["id"] not in have]
 
+
+ArticleIndex.hit_class = ArticleHit
 
 _index: Optional[ArticleIndex] = None
 _checked = False

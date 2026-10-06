@@ -37,6 +37,15 @@ COPY data/processed/corpus_articles.jsonl      data/processed/corpus_articles.js
 COPY data/index/articles_vectors.npy           data/index/articles_vectors.npy
 COPY data/index/articles_bm25_compact.npz      data/index/articles_bm25_compact.npz
 COPY data/index/articles_bm25_vocab.json       data/index/articles_bm25_vocab.json
+# The networking textbook: what the bot answers from now (DATASET=network, the
+# default). Its figures are under web/figures and came in with web/ above. The
+# files above this block are the Teachers Council dataset, kept so that
+# DATASET=ksp is a restart rather than a rebuild.
+COPY data/processed/corpus_network.jsonl       data/processed/corpus_network.jsonl
+COPY data/processed/figures_network.json       data/processed/figures_network.json
+COPY data/index/network_vectors.npy            data/index/network_vectors.npy
+COPY data/index/network_bm25_compact.npz       data/index/network_bm25_compact.npz
+COPY data/index/network_bm25_vocab.json        data/index/network_bm25_vocab.json
 
 # the remote embedder is the whole point of this image; leaving the default
 # would make it try to import torch at the first question

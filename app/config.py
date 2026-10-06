@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # on older webhook payloads that lack the isSelf flag.
     line_bot_user_id: str = ""
 
+    # Where this service is reached from outside. LINE fetches a picture by
+    # URL, so a figure under an answer needs the full address, not a path.
+    public_base_url: str = "https://thai-law-bot-c5zo.onrender.com"
+
     # --- live monitoring ---
     # Shared secret for GET /recent, which returns the questions people have just
     # asked. Blank turns the endpoint off entirely rather than leaving it open:
@@ -205,6 +209,47 @@ class Settings(BaseSettings):
     @property
     def articles_vocab_path(self) -> str:
         return os.path.join(INDEX_DIR, "articles_bm25_vocab.json")
+
+    # Which dataset the bot answers from.
+    #
+    #   "network"  the textbook คู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น, through
+    #              app/book.py. What the bot is now.
+    #   "ksp"      the Teachers Council regulations and the fourteen journal
+    #              articles, through the rule path in app/answer.py. Kept whole
+    #              and still tested; set DATASET=ksp to serve it again.
+    #
+    # Only the files of the one named here are opened at boot.
+    dataset: str = "network"
+    book_file: str = "corpus_network.jsonl"
+    # The in-scope gate of the book path, a BGE-M3 cosine. Read from
+    # `python -m ingest.calibrate_book`, 35 probes, 2026-10-06:
+    #
+    #   answerable from the book            n=24   0.570 – 0.779
+    #   networking, but not in the book     n=5    0.505 – 0.571
+    #   not about networking                n=6    0.364 – 0.401
+    #
+    # 0.50 sits in the gap between the last group and the other two. The
+    # middle group overlaps the first and no threshold separates them: those
+    # are stopped by the guards in app/book.py, not here. Every probe was
+    # written by the developer from the book; re-read this once real
+    # questions from students are in data/eval/.
+    book_min_sim: float = 0.50
+
+    @property
+    def book_path(self) -> str:
+        return os.path.join(PROCESSED_DIR, self.book_file)
+
+    @property
+    def book_vectors_path(self) -> str:
+        return os.path.join(INDEX_DIR, "network_vectors.npy")
+
+    @property
+    def book_bm25_path(self) -> str:
+        return os.path.join(INDEX_DIR, "network_bm25_compact.npz")
+
+    @property
+    def book_vocab_path(self) -> str:
+        return os.path.join(INDEX_DIR, "network_bm25_vocab.json")
 
     @property
     def vectors_path(self) -> str:

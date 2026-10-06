@@ -8,6 +8,25 @@
 
 ---
 
+## 0. บอทตอบจากชุดข้อมูลไหน
+
+ตั้งที่ `DATASET` (ค่าใน `app/config.py` คือ `dataset`)
+
+| ค่า | ตอบจาก | ทางตอบ | หน้าเว็บ |
+|:---|:---|:---|:---|
+| `network` (ค่าเริ่มต้น) | หนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น รหัสวิชา 2204-2003 พร้อมรูปจากหนังสือ | `app/book.py` | `web/index.html` |
+| `ksp` | ข้อบังคับคุรุสภาและบทความ 14 เรื่อง (ชุดเดิม เก็บไว้ครบ ไม่ได้ลบ) | `app/answer.py` + `app/articles.py` | `web/index_ksp.html` |
+
+เทสต์ของชุดเดิมยังรันกับชุดเดิมทุกตัว กำหนดไว้ใน `tests/conftest.py`
+ผลประเมินผู้ประเมินสามคน (หัวข้อ 8) เป็นของชุด `ksp` เท่านั้น ชุด `network` ยังไม่เคยถูกประเมิน
+
+ข้อความและรูปของหนังสืออยู่ใน git เพราะ Render build จาก git เท่านั้น
+ลิขสิทธิ์เป็นของบริษัท ซีเอ็ดยูเคชั่น จำกัด (มหาชน) ใช้เพื่อการศึกษา
+ที่มาและข้อความแจ้งอยู่ใน `data/processed/corpus_network_SOURCES.md`
+ไฟล์ต้นทาง (`data/raw/network/` ทั้ง md และ pdf 80 MB) ไม่อยู่ใน git
+
+---
+
 ## 1. กฎที่ห้ามละเมิดเด็ดขาด
 
 งานนี้เป็นปริญญานิพนธ์ ตัวเลขทุกตัวที่อยู่ในเล่ม ในสไลด์ และในไฟล์ Excel
@@ -40,6 +59,8 @@ repo นี้เป็น public
 | เพิ่ม `COPY data/...` ใน `Dockerfile` | เพิ่มบรรทัด `!data/...` ใน `.dockerignore` | build บน Render ล้มที่ `"...": not found` |
 | คลังข้อมูล | รันรายงานชุดข้อมูลใหม่ | ตัวเลขในรายงานไม่ตรงกับไฟล์จริง |
 | `data/processed/corpus_articles.jsonl` | รัน `python -m ingest.build_article_index` แล้ว `python -m ingest.calibrate_articles` | ระบบโยน `article index/corpus mismatch` หรือเกณฑ์ส่งทางใน `app/articles.py` ไม่ตรงกับข้อมูล |
+| `data/processed/corpus_network.jsonl` | รัน `python -m ingest.build_book_index` แล้ว `python -m ingest.calibrate_book` | ระบบโยน `book index/corpus mismatch` หรือ `book_min_sim` ใน `app/config.py` ไม่ตรงกับข้อมูล |
+| `data/raw/network/network-basics.md` หรือ `.pdf` | รัน `python -m ingest.extract_book` และ `python -m ingest.extract_figures` ทั้งคู่ | ชิ้นข้อความอ้างรูปที่ไม่มีไฟล์ คำตอบจึงไม่มีรูป |
 | `SYSTEM_PROMPT` | ตัวเลขจำนวนข้อใน `report/chapter3_content.py` และสไลด์ | เล่มบอกจำนวนกฎผิด |
 
 `tests/test_docker_context.py` จับคู่แรกไว้แล้ว รันเทสต์ก่อน push จะไม่เจอบน Render
@@ -61,6 +82,10 @@ repo นี้เป็น public
 | `data/index/*` | `python -m ingest.build_index` |
 | `data/processed/corpus_articles.jsonl` / `corpus_articles_SOURCES.md` | `python -m ingest.extract_articles` |
 | `data/index/articles_*` | `python -m ingest.build_article_index` |
+| `data/processed/corpus_network.jsonl` / `corpus_network_SOURCES.md` | `python -m ingest.extract_book` |
+| `data/index/network_*` | `python -m ingest.build_book_index` |
+| `web/figures/*` / `data/processed/figures_network.json` | `python -m ingest.extract_figures` (ต้องใช้ macOS) |
+| `assets/network/*.png` / `web/logo.png` | เรนเดอร์จาก `assets/network/logo.html` และ `richmenu.html` |
 
 แก้ที่สคริปต์ แล้วสร้างใหม่ เสมอ
 
@@ -75,7 +100,7 @@ repo นี้เป็น public
 .venv/bin/python -m pytest -q
 ```
 
-ต้องผ่านครบ ตอนนี้ 449 ตัว เทสต์ตกแม้ตัวเดียวคือยังไม่ commit
+ต้องผ่านครบ ตอนนี้ 503 ตัว เทสต์ตกแม้ตัวเดียวคือยังไม่ commit
 
 push ขึ้น `main` แล้ว Render จะ deploy เองอัตโนมัติ (`autoDeployTrigger: commit`)
 แปลว่า **push ผิด = เซิร์ฟเวอร์จริงพังทันที** ไม่มีขั้นกลาง

@@ -3,25 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ผู้ช่วยจรรยาบรรณวิชาชีพครู — KMUTNB</title>
+<title>ผู้ช่วยวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น — KMUTNB</title>
 <link rel="icon" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Palette sampled from assets/profile_c.png, the bot's LINE profile picture,
-     so the web chat and the LINE account read as the same product. */
+  /* Palette taken from assets/network/logo.html, the bot's LINE profile
+     picture, so the web chat and the LINE account read as the same product.
+     The page for the Teachers Council dataset is kept as index_ksp.html. */
   :root {
-    --page:   #f0ecec;
+    --page:   #eef3f7;
     --card:   #ffffff;
-    --ink:    #1b1416;
-    --muted:  #857a7c;
-    --faint:  #b3a8aa;
-    --line:   #eae4e4;
-    --accent: #7a2233;          /* the maroon field of the logo */
-    --accent-2:#a5676c;         /* the muted rose of its ring */
-    --cream:  #f6e9d8;          /* the scales and the book */
-    --accent-soft: #fbf1f2;
+    --ink:    #101a24;
+    --muted:  #6b7a89;
+    --faint:  #a3b0bd;
+    --line:   #dfe7ee;
+    --accent: #0b4f8a;          /* the blue field of the logo */
+    --accent-2:#12b5cb;         /* the cyan of its nodes */
+    --cream:  #dff5f9;          /* the pale cyan of its links */
+    --accent-soft: #eaf4fb;
     --warn:   #b45309;
     --warn-bg:#fffbeb;
     --ok:     #16a34a;
@@ -55,7 +56,7 @@
   .brand { display: flex; align-items: center; gap: 9px; padding: 0 6px 14px; }
   .brand img {
     width: 30px; height: 30px; border-radius: 50%; flex: none;
-    box-shadow: 0 3px 10px rgba(122,34,51,.28);
+    box-shadow: 0 3px 10px rgba(11,79,138,.28);
   }
   .brand b { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 
@@ -65,7 +66,7 @@
     border-radius: var(--r-md); padding: 9px 12px 9px 32px;
     font: inherit; font-size: 13.5px; color: var(--ink); outline: none;
   }
-  .search input:focus { border-color: #e3c9ce; background: #fff; }
+  .search input:focus { border-color: #b9d7ec; background: #fff; }
   .search svg { position: absolute; left: 11px; top: 11px; opacity: .4; }
 
   nav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
@@ -75,7 +76,7 @@
     padding: 8px 10px; font: inherit; font-size: 14px; color: #3f434b;
     cursor: pointer; text-align: left;
   }
-  nav button:hover { background: #f7f3f3; color: var(--ink); }
+  nav button:hover { background: #f1f6fa; color: var(--ink); }
   nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
   nav svg { flex: none; }
 
@@ -90,8 +91,8 @@
     color: #5c626c; cursor: pointer; text-align: left;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .hist button:hover { background: #f7f3f3; color: var(--ink); }
-  .hist button.on { background: #f3eeee; color: var(--ink); }
+  .hist button:hover { background: #f1f6fa; color: var(--ink); }
+  .hist button.on { background: #e9f0f6; color: var(--ink); }
   .hist .empty { padding: 10px; font-size: 13px; color: var(--faint); }
 
   /* add-on-LINE call to action: the web chat is for trying the bot out, LINE is
@@ -143,10 +144,10 @@
   .topright { display: flex; align-items: center; gap: 9px; }
   .newchat {
     display: flex; align-items: center; gap: 7px;
-    background: #1b1416; color: #fff; border: 0; border-radius: 999px;
+    background: #101a24; color: #fff; border: 0; border-radius: 999px;
     padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
   }
-  .newchat:hover { background: #2c2225; }
+  .newchat:hover { background: #1c2a38; }
   .lineTop {
     display: flex; align-items: center; gap: 7px; text-decoration: none;
     background: var(--line-green); color: #fff; border-radius: 999px;
@@ -161,7 +162,7 @@
   /* the logo itself stands in for the reference design's gradient orb */
   .orb {
     width: 112px; height: 112px; border-radius: 50%; margin-bottom: 24px;
-    box-shadow: 0 18px 40px rgba(122,34,51,.28);
+    box-shadow: 0 18px 40px rgba(11,79,138,.28);
   }
   .hero h1 { margin: 0; font-size: 33px; line-height: 1.42; font-weight: 700; letter-spacing: -.4px; }
   .hero h1 .g {
@@ -210,11 +211,11 @@
   .box {
     max-width: 860px; margin: 0 auto; background: rgba(255,255,255,.82);
     backdrop-filter: blur(12px);
-    border: 1px solid #eae0e1; border-radius: var(--r-lg);
+    border: 1px solid #dbe6ef; border-radius: var(--r-lg);
     box-shadow: 0 10px 30px rgba(20,22,26,.06);
     padding: 14px 14px 11px;
   }
-  .box:focus-within { border-color: #e3c9ce; }
+  .box:focus-within { border-color: #b9d7ec; }
   .box textarea {
     width: 100%; border: 0; outline: none; resize: none; background: none;
     font: inherit; font-size: 15px; color: var(--ink); min-height: 58px; max-height: 190px;
@@ -226,8 +227,8 @@
     background: #fff; border: 1px solid var(--line); border-radius: 999px;
     padding: 7px 13px; font: inherit; font-size: 12.5px; color: #4b515b; cursor: pointer;
   }
-  .tools .pill:hover { border-color: #e3c9ce; color: var(--ink); }
-  .tools .pill.on { background: var(--accent-soft); border-color: #e3c9ce; color: var(--accent); }
+  .tools .pill:hover { border-color: #b9d7ec; color: var(--ink); }
+  .tools .pill.on { background: var(--accent-soft); border-color: #b9d7ec; color: var(--accent); }
   .tools .grow { flex: 1; }
   .send {
     width: 38px; height: 38px; border-radius: 12px; border: 0; cursor: pointer;
@@ -247,7 +248,7 @@
     border-radius: var(--r-md); padding: 12px 14px; font: inherit; font-size: 14px;
     color: #3f434b; cursor: pointer; line-height: 1.55;
   }
-  .qgrid button:hover { border-color: #e3c9ce; color: var(--ink); background: #fffdfd; }
+  .qgrid button:hover { border-color: #b9d7ec; color: var(--ink); background: #fbfdff; }
   .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 6px; }
   .nums div {
     background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px;
@@ -271,7 +272,15 @@
     background: rgba(255,255,255,.75); border: 1px solid var(--line); border-radius: 999px;
     padding: 8px 14px; font: inherit; font-size: 13px; color: #4b515b; cursor: pointer;
   }
-  .chips button:hover { border-color: #e3c9ce; color: var(--ink); }
+  .chips button:hover { border-color: #b9d7ec; color: var(--ink); }
+
+  /* figures from the book, shown under the answer that cites their page */
+  .figs { display: grid; gap: 10px; margin-top: 12px; }
+  .figs figure { margin: 0; background: #fff; border: 1px solid var(--line);
+    border-radius: var(--r-sm); overflow: hidden; }
+  .figs img { display: block; width: 100%; height: auto; }
+  .figs figcaption { padding: 7px 11px; font-size: 12.5px; color: var(--muted);
+    border-top: 1px solid var(--line); background: #fafcfe; }
 
   @media (max-width: 860px) {
     .app { grid-template-columns: 1fr; inset: 8px; }
@@ -284,7 +293,7 @@
 <div class="app">
 
   <aside class="side">
-    <div class="brand"><img src="/static/logo.png" alt="" width="30" height="30"><b>ผู้ช่วยจรรยาบรรณวิชาชีพครู</b></div>
+    <div class="brand"><img src="/static/logo.png" alt="" width="30" height="30"><b>ผู้ช่วยวิชาเครือข่าย</b></div>
 
     <div class="search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -307,7 +316,7 @@
       <button id="navScope">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/></svg>
-        คลังกฎหมายที่มี
+        เนื้อหาในหนังสือ
       </button>
     </nav>
 
@@ -345,9 +354,9 @@
 
     <div class="scroll" id="scroll">
       <div class="hero" id="hero">
-        <img class="orb" src="/static/logo.png" alt="โลโก้ผู้ช่วยจรรยาบรรณวิชาชีพครู" width="112" height="112">
-        <h1>สวัสดีครับ<br><span class="g">วันนี้อยากรู้เรื่องอะไร</span></h1>
-        <p>ถามเป็นภาษาพูดได้เลย ผมค้นจากข้อบังคับคุรุสภาฉบับจริงและอ้างเลขข้อให้ตรวจสอบทุกคำตอบ</p>
+        <img class="orb" src="/static/logo.png" alt="โลโก้ผู้ช่วยวิชาเครือข่ายคอมพิวเตอร์" width="112" height="112">
+        <h1>สวัสดีครับ<br><span class="g">วันนี้ทบทวนเรื่องอะไรดี</span></h1>
+        <p>ถามเป็นภาษาพูดได้เลย ผมตอบจากหนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น บอกบทและหน้าทุกคำตอบ พร้อมรูปประกอบจากหนังสือ</p>
         <div class="chips" id="chips"></div>
       </div>
       <div class="panel" id="panel" style="display:none"></div>
@@ -356,17 +365,17 @@
 
     <div class="composer">
       <form class="box" id="form">
-        <textarea id="q" rows="1" placeholder="พิมพ์คำถามได้เลย เช่น ครูด่านักเรียนหน้าชั้นผิดจรรยาบรรณไหม"></textarea>
+        <textarea id="q" rows="1" placeholder="พิมพ์คำถามได้เลย เช่น สายคู่บิดเกลียวคืออะไร"></textarea>
         <div class="tools">
-          <button type="button" class="pill" id="tSearch" title="ข้ามการเรียบเรียงคำตอบ แสดงเฉพาะตัวบทที่ค้นเจอ">
+          <button type="button" class="pill" id="tSearch" title="ข้ามการเรียบเรียงคำตอบ แสดงเฉพาะเนื้อหาในหนังสือที่ค้นเจอ">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
-            ค้นตัวบทอย่างเดียว
+            ค้นเนื้อหาอย่างเดียว
           </button>
-          <button type="button" class="pill" id="tSources" title="เปิดกล่องตัวบทอ้างอิงไว้เสมอ">
+          <button type="button" class="pill" id="tSources" title="เปิดกล่องเนื้อหาอ้างอิงไว้เสมอ">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/></svg>
-            กางตัวบทอัตโนมัติ
+            กางเนื้อหาอ้างอิงอัตโนมัติ
           </button>
           <span class="grow"></span>
           <button type="submit" class="send" id="send" title="ส่ง (Enter)">
@@ -375,7 +384,7 @@
           </button>
         </div>
       </form>
-      <div class="hint">คำตอบอ้างอิงตัวบทจริง แต่ไม่ใช่คำปรึกษาทางกฎหมาย เรื่องสำคัญควรตรวจกับนักกฎหมาย</div>
+      <div class="hint">คำตอบสรุปจากหนังสือ ใช้ทบทวนบทเรียน ควรอ่านเนื้อหาเต็มตามหน้าที่อ้างประกอบ</div>
     </div>
   </section>
 </div>
@@ -386,48 +395,48 @@ const scroll = $('scroll'), log = $('log'), hero = $('hero');
 const form = $('form'), input = $('q'), send = $('send');
 
 const EXAMPLES = [
-  'จรรยาบรรณวิชาชีพครูมีกี่ด้าน อะไรบ้าง',
-  'ครูด่านักเรียนหน้าชั้นผิดจรรยาบรรณไหม',
-  'ครูผิดจรรยาบรรณมีโทษอะไรบ้าง',
-  'ครูนินทาเพื่อนครูผิดข้อไหน',
-  'อุทธรณ์คำวินิจฉัยได้ภายในกี่วัน',
+  'สายคู่บิดเกลียวคืออะไร มีข้อดีข้อเสียอย่างไร',
+  'แบบจำลอง OSI มีกี่ชั้น อะไรบ้าง',
+  'โทโปโลยีแบบดาวใช้อุปกรณ์อะไรเป็นศูนย์กลาง',
+  'เครือข่ายแบบเวิร์กกรุ๊ปต่างจากแบบโดเมนอย่างไร',
+  'การเข้าหัวสายแลนตามมาตรฐาน T568B เรียงสีอย่างไร',
 ];
-// Every question here was run against the bot and returned a rule that actually
-// governs it -- not merely a score above the gate. A menu of examples that get
+// Every question here was run against the bot and came back answered from the
+// book -- see data/eval/network_questions.jsonl. A menu of examples that get
 // refused is worse than no menu at all.
 const TOPICS = [
-  ['จรรยาบรรณห้าด้าน', [
-    'จรรยาบรรณวิชาชีพครูมีกี่ด้าน อะไรบ้าง',
-    'จรรยาบรรณต่อตนเองของครูคืออะไร',
-    'ครูต้องพัฒนาตัวเองด้านไหนบ้าง',
-    'จรรยาบรรณต่อสังคมของครูคืออะไร',
+  ['พื้นฐานเครือข่าย', [
+    'เครือข่ายคอมพิวเตอร์คืออะไร',
+    'ส่วนประกอบของระบบการสื่อสารข้อมูลมีอะไรบ้าง',
+    'แบบจำลอง OSI มีกี่ชั้น อะไรบ้าง',
+    'เครือข่ายท้องถิ่นหรือ LAN คืออะไร',
+    'ข้อเสียของ VoIP คืออะไร',
   ]],
-  ['ครูกับศิษย์', [
-    'ครูด่านักเรียนหน้าชั้นผิดจรรยาบรรณไหม',
-    'ครูลงโทษนักเรียนด้วยการตีได้ไหม',
-    'ครูเอาความลับของนักเรียนไปเล่าให้คนอื่นฟังได้ไหม',
-    'ครูเรียกเงินจากผู้ปกครองเพื่อให้ลูกได้เกรดดีผิดข้อไหน',
-    'ครูต้องปฏิบัติกับนักเรียนทุกคนเท่ากันไหม',
+  ['สื่อกลางส่งข้อมูล', [
+    'สายคู่บิดเกลียวคืออะไร มีข้อดีข้อเสียอย่างไร',
+    'สายโคแอกเชียลมีข้อดีอะไร',
+    'สายใยแก้วนำแสงมีข้อเสียอะไรบ้าง',
+    'บลูทูธส่งสัญญาณได้ไกลประมาณกี่เมตร',
   ]],
-  ['ครูกับเพื่อนร่วมวิชาชีพ', [
-    'ครูนินทาเพื่อนครูผิดจรรยาบรรณไหม',
-    'ครูโยนความผิดให้เพื่อนครูผิดข้อไหน',
-    'ครูรวมกลุ่มกันกลั่นแกล้งครูใหม่ ผิดอะไร',
+  ['อุปกรณ์และประสิทธิภาพ', [
+    'ฮับทำงานอยู่ในชั้นสื่อสารใดของแบบจำลอง OSI',
+    'เร้าเตอร์ทำงานอยู่ในชั้นสื่อสารใด',
+    'เกณฑ์วัดประสิทธิภาพเครือข่ายมีอะไรบ้าง',
   ]],
-  ['ครูกับวิชาชีพ', [
-    'ครูลอกผลงานวิชาการคนอื่นมาเป็นของตัวเอง ผิดด้านไหน',
-    'ครูเล่นการพนันผิดจรรยาบรรณไหม',
-    'ใครเป็นคนกำหนดจรรยาบรรณของวิชาชีพครู',
+  ['โทโปโลยีและมาตรฐาน', [
+    'โทโปโลยีแบบดาวใช้อุปกรณ์อะไรเป็นศูนย์กลาง',
+    'โทโปโลยีแบบวงแหวนมีข้อเสียอย่างไร',
+    'IEEE 802.5 คือมาตรฐานอะไร',
   ]],
-  ['โทษและกระบวนการ', [
-    'ครูผิดจรรยาบรรณมีโทษอะไรบ้าง',
-    'พักใช้ใบอนุญาตได้นานสุดกี่ปี',
-    'อยากร้องเรียนครูที่ประพฤติผิดจรรยาบรรณ ต้องทำยังไง',
-    'คณะอนุกรรมการสอบสวนมีกี่คน',
+  ['สายแลนและเวิร์กกรุ๊ป', [
+    'การเข้าหัวสายแลนตามมาตรฐาน T568B เรียงสีอย่างไร',
+    'สร้างสายแลนแบบไขว้ต้องเรียงสีแบบไหน',
+    'เครือข่ายแบบเวิร์กกรุ๊ปต่างจากแบบโดเมนอย่างไร',
+    'หมายเลขไอพีคลาส C สำหรับเครือข่ายส่วนตัวอยู่ในช่วงใด',
   ]],
-  ['การอุทธรณ์', [
-    'อุทธรณ์คำวินิจฉัยได้ภายในกี่วัน',
-    'ยื่นอุทธรณ์ได้ทางไหนบ้าง',
+  ['ใช้งานบน Windows', [
+    'การแมปไดรฟ์คืออะไร',
+    'โปรแกรม Alchemy Network Inventory ใช้ทำอะไร',
   ]],
 ];
 
@@ -441,7 +450,7 @@ EXAMPLES.forEach(t => {
 /* ---------------------------------------------------------------- history
    Kept in localStorage: the server holds no session, so a reload would
    otherwise lose the conversation the user is reading. */
-const KEY = 'thai-law-chats';
+const KEY = 'network-bot-chats';
 let chats = [];
 let current = null;
 
@@ -463,12 +472,12 @@ function newChat() {
   input.focus();
   renderHistory();
 }
-function remember(role, text, sources) {
+function remember(role, text, sources, figures) {
   if (!current) {
     current = { id: Date.now(), title: text.slice(0, 60), ts: Date.now(), messages: [] };
     chats.unshift(current);
   }
-  current.messages.push({ role, text, sources: sources || null });
+  current.messages.push({ role, text, sources: sources || null, figures: figures || null });
   current.ts = Date.now();
   save();
   renderHistory();
@@ -481,6 +490,7 @@ function openChat(chat) {
   log.innerHTML = '';
   chat.messages.forEach(m => {
     const b = bubble(m.text, m.role === 'user' ? 'me' : (m.warn ? 'warn' : 'bot'));
+    if (m.figures) addFigures(b, m.figures);
     if (m.sources) addSources(b, m.sources);
   });
   renderHistory();
@@ -555,7 +565,7 @@ function showExamples() {
   openPanel('navExamples');   // synchronous, so no token check needed
   const parts = [
     '<h2>ตัวอย่างคำถาม</h2>',
-    '<p class="lede">ทุกคำถามด้านล่างอยู่ในขอบเขตที่คลังตอบได้จริง กดแล้วถามได้เลย</p>',
+    '<p class="lede">ทุกคำถามด้านล่างตอบได้จากหนังสือจริง กดแล้วถามได้เลย</p>',
   ];
   TOPICS.forEach(([name, qs]) => {
     parts.push(`<h3>${esc(name)}</h3><div class="qgrid">`);
@@ -575,33 +585,31 @@ function showExamples() {
 
 async function showScope() {
   const token = openPanel('navScope');
-  panel.innerHTML = '<h2>คลังกฎหมายที่มี</h2><p class="lede">กำลังอ่านจากเซิร์ฟเวอร์…</p>';
+  panel.innerHTML = '<h2>เนื้อหาในหนังสือ</h2><p class="lede">กำลังอ่านจากเซิร์ฟเวอร์…</p>';
   try {
     const s = await (await fetch('/stats')).json();
     if (token !== panelToken) return;   // the user moved on while we waited
-    const rows = s.largest.map(a =>
-      `<div><span style="color:#3f434b">${esc(a.act)}</span>` +
-      `<span>${a.sections.toLocaleString()} มาตรา</span></div>`).join('');
+    const rows = s.largest.map(c =>
+      `<div><span style="color:#3f434b">บทที่ ${c.chapter} ${esc(c.title)}</span>` +
+      `<span>${c.sections.toLocaleString()} หัวข้อ</span></div>`).join('');
     panel.innerHTML =
-      '<h2>คลังกฎหมายที่มี</h2>' +
+      '<h2>เนื้อหาในหนังสือ</h2>' +
       '<p class="lede">ตัวเลขทั้งหมดอ่านจากคลังจริงที่เซิร์ฟเวอร์โหลดอยู่ตอนนี้ ไม่ได้เขียนไว้ล่วงหน้า</p>' +
       '<div class="nums">' +
-      `<div><b>${s.acts.toLocaleString()}</b><span>ฉบับ</span></div>` +
-      `<div><b>${s.sections.toLocaleString()}</b><span>ข้อและมาตรา</span></div>` +
-      `<div><b>${s.corpus_as_of}</b><span>ข้อมูลถึง</span></div>` +
+      `<div><b>${s.chapters.toLocaleString()}</b><span>บท</span></div>` +
+      `<div><b>${s.sections.toLocaleString()}</b><span>หัวข้อ</span></div>` +
+      `<div><b>${s.figures.toLocaleString()}</b><span>รูปประกอบ</span></div>` +
       '</div>' +
-      '<h3>ฉบับที่มีข้อมากที่สุด</h3>' +
+      `<h3>${esc(s.book)} (รหัสวิชา 2204-2003)</h3>` +
       `<div class="acts">${rows}</div>` +
-      '<h3>สิ่งที่ยังไม่มีในคลัง</h3>' +
-      '<div class="gap">คลังมีเฉพาะ<b>จรรยาบรรณวิชาชีพทางการศึกษา</b> ' +
-      'ตามข้อบังคับคุรุสภาและพระราชบัญญัติสภาครูฯ<br>' +
-      'เรื่องที่ใกล้ที่สุดแต่<b>ตอบไม่ได้</b>คือ วินัยข้าราชการครู ซึ่งเป็นคนละเรื่องกับจรรยาบรรณ ' +
-      'การขอและต่อใบอนุญาต เงินเดือนและสัญญาจ้าง ภาษี และคดีอาญาหรือคดีแพ่ง<br>' +
-      'ถ้าถามเรื่องพวกนี้บอทจะบอกตรง ๆ ว่าไม่มีข้อมูลและชี้ว่าอยู่ในกฎหมายฉบับใด ' +
-      'แทนที่จะเดาเลขข้อให้</div>';
+      '<h3>สิ่งที่ตอบไม่ได้</h3>' +
+      '<div class="gap">ผมตอบได้เฉพาะ<b>เรื่องที่หนังสือเล่มนี้เขียนไว้</b><br>' +
+      'เรื่องเครือข่ายที่หนังสือไม่ได้อธิบาย เช่น IPv6 VLAN หรือการตั้งค่าอุปกรณ์เฉพาะยี่ห้อ ' +
+      'และแบบทดสอบท้ายบทซึ่งหนังสือไม่ได้พิมพ์เฉลยไว้ ผมจะบอกตรง ๆ ว่าไม่มีข้อมูล ' +
+      'แทนที่จะตอบจากความจำ</div>';
   } catch (err) {
     if (token !== panelToken) return;
-    panel.innerHTML = '<h2>คลังกฎหมายที่มี</h2>' +
+    panel.innerHTML = '<h2>เนื้อหาในหนังสือ</h2>' +
       '<div class="gap">อ่านข้อมูลจากเซิร์ฟเวอร์ไม่ได้: ' + esc(err.message) + '</div>';
   }
 }
@@ -638,7 +646,7 @@ function addSources(el, sources) {
   const d = document.createElement('details');
   if ($('tSources').classList.contains('on')) d.open = true;
   const s = document.createElement('summary');
-  s.textContent = `ตัวบทที่ใช้ตอบ ${sources.length} มาตรา`;
+  s.textContent = `เนื้อหาจากหนังสือที่ใช้ตอบ ${sources.length} ชิ้น`;
   d.appendChild(s);
   sources.forEach(src => {
     const row = document.createElement('div');
@@ -653,6 +661,29 @@ function addSources(el, sources) {
     d.appendChild(row);
   });
   el.appendChild(d);
+}
+
+// Pictures from the book, under the answer they belong to. The server picks
+// them; this only draws what it was given.
+function addFigures(el, figures) {
+  if (!figures || !figures.length) return;
+  const box = document.createElement('div');
+  box.className = 'figs';
+  figures.forEach(f => {
+    const fig = document.createElement('figure');
+    const img = document.createElement('img');
+    img.src = f.url;
+    img.alt = f.caption;
+    img.loading = 'lazy';
+    img.width = f.width;
+    img.height = f.height;
+    img.onload = () => { scroll.scrollTop = scroll.scrollHeight; };
+    const cap = document.createElement('figcaption');
+    cap.textContent = `รูปที่ ${f.number} ${f.caption} (หน้า ${f.page})`;
+    fig.append(img, cap);
+    box.appendChild(fig);
+  });
+  el.appendChild(box);
 }
 
 // the two pills are modes, not decorations
@@ -685,8 +716,8 @@ async function submit() {
       const res = await fetch('/search?k=6&q=' + encodeURIComponent(q));
       const d = await res.json();
       pending.textContent = d.hits.length
-        ? `พบตัวบทที่เกี่ยวข้อง ${d.hits.length} มาตรา (ความคล้ายสูงสุด ${d.max_dense})`
-        : 'ไม่พบตัวบทที่เกี่ยวข้อง';
+        ? `พบเนื้อหาที่เกี่ยวข้อง ${d.hits.length} ชิ้น (ความคล้ายสูงสุด ${d.max_dense})`
+        : 'ไม่พบเนื้อหาที่เกี่ยวข้อง';
       if (!d.in_scope) pending.classList.add('warn');
       addSources(pending, d.hits);
       remember('bot', pending.textContent, d.hits);
@@ -699,8 +730,9 @@ async function submit() {
       const d = await res.json();
       pending.textContent = d.answer;
       if (!d.in_scope) pending.classList.add('warn');
+      addFigures(pending, d.figures);
       addSources(pending, d.sources);
-      remember('bot', d.answer, d.sources);
+      remember('bot', d.answer, d.sources, d.figures);
     }
   } catch (err) {
     pending.textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ' + err.message;
@@ -722,15 +754,19 @@ load();
 renderHistory();
 input.focus();
 
+// /?q=... asks that question on load, so a link can point at an answer
+const asked = new URLSearchParams(location.search).get('q');
+if (asked) { input.value = asked; submit(); }
+
 fetch('/health').then(r => r.json()).then(h => {
   const row = (ok, label) =>
     `<div><span class="dot ${ok ? 'on' : ''}"></span>${label}</div>`;
   $('status').innerHTML =
-    row(true, `${h.chunks.toLocaleString()} มาตราในคลัง`) +
+    row(true, `${h.chunks.toLocaleString()} ชิ้นเนื้อหาในคลัง`) +
     row(h.dense_index, 'ค้นเชิงความหมาย') +
     row(h.llm_configured, 'Typhoon เชื่อมต่อแล้ว') +
     row(h.line_configured, 'LINE เชื่อมต่อแล้ว') +
-    `<div><span class="dot on"></span>ข้อมูลถึง ${h.corpus_as_of}</div>`;
+    row(h.figures > 0, `รูปประกอบ ${h.figures} รูป`);
 }).catch(() => {
   $('status').innerHTML = '<div><span class="dot"></span>เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</div>';
 });

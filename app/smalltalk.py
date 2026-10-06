@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 
+from app.config import settings
+
 CAPABILITIES = (
     "ผมตอบคำถามเรื่องจรรยาบรรณวิชาชีพทางการศึกษา จากข้อบังคับคุรุสภาฉบับจริง "
     "และอ้างเลขข้อให้ทุกครั้งเพื่อให้ตรวจสอบต่อได้ครับ\n\n"
@@ -87,12 +89,70 @@ ROUTES: tuple[tuple[re.Pattern, str], ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# The same four replies for the networking textbook. The constants above are
+# the Teachers Council bot's and are served when DATASET=ksp.
+
+NETWORK_CAPABILITIES = (
+    "ผมช่วยทบทวนวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น (รหัสวิชา 2204-2003) "
+    "ตอบจากหนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น บอกบทและหน้าให้ทุกครั้ง "
+    "และแนบรูปจากหนังสือให้เมื่อมีรูปประกอบครับ\n\n"
+    "ถามได้เลย เช่น\n"
+    "• สายคู่บิดเกลียวคืออะไร มีข้อดีข้อเสียอย่างไร\n"
+    "• แบบจำลอง OSI มีกี่ชั้น อะไรบ้าง\n"
+    "• โทโปโลยีแบบดาวต่างจากแบบบัสอย่างไร\n"
+    "• เครือข่ายแบบเวิร์กกรุ๊ปต่างจากแบบโดเมนอย่างไร\n"
+    "• ขั้นตอนการเข้าหัวสายแลน RJ-45 มีอะไรบ้าง\n\n"
+    "หนังสือมี 7 บท ตั้งแต่พื้นฐานการสื่อสารข้อมูล สื่อกลางและอุปกรณ์เครือข่าย "
+    "โทโปโลยีและเครือข่ายท้องถิ่น ไปจนถึงการตั้งค่าเวิร์กกรุ๊ป บัญชีผู้ใช้ สิทธิ์ "
+    "และการแชร์ไฟล์กับเครื่องพิมพ์บน Windows\n\n"
+    "เรื่องที่หนังสือเล่มนี้ไม่ได้เขียนไว้ ผมจะบอกตรง ๆ ว่าไม่มี ไม่เดาให้ครับ"
+)
+
+NETWORK_GREETING = "สวัสดีครับ 👋\n\n" + NETWORK_CAPABILITIES
+
+NETWORK_EXAMPLES = (
+    "ตัวอย่างคำถามที่ผมตอบได้จากหนังสือ ก็อปแล้วส่งมาได้เลยครับ\n\n"
+    "🌐 พื้นฐานเครือข่าย\n"
+    "• เครือข่ายคอมพิวเตอร์คืออะไร\n"
+    "• แบบจำลอง OSI มีกี่ชั้น อะไรบ้าง\n"
+    "• เครือข่าย LAN MAN WAN ต่างกันอย่างไร\n\n"
+    "🔌 สื่อกลางและอุปกรณ์\n"
+    "• สายคู่บิดเกลียวคืออะไร มีข้อดีข้อเสียอย่างไร\n"
+    "• สายใยแก้วนำแสงมีข้อดีอะไรบ้าง\n"
+    "• ฮับกับสวิตช์ต่างกันอย่างไร\n\n"
+    "🕸️ โทโปโลยีและแลน\n"
+    "• โทโปโลยีแบบดาวมีข้อดีข้อเสียอะไร\n"
+    "• CSMA/CD ทำงานอย่างไร\n\n"
+    "🖥️ ภาคปฏิบัติบน Windows\n"
+    "• ขั้นตอนการเข้าหัวสายแลน RJ-45 มีอะไรบ้าง\n"
+    "• เครือข่ายแบบเวิร์กกรุ๊ปต่างจากแบบโดเมนอย่างไร\n"
+    "• การแมปไดรฟ์คืออะไร"
+)
+
+NETWORK_ROUTES: tuple[tuple[re.Pattern, str], ...] = (
+    (re.compile(rf"^ตัวอย่างคำถาม{TAIL}$"), NETWORK_EXAMPLES),
+    (re.compile(rf"^ถามเรื่องเครือข่าย{TAIL}$"), NETWORK_CAPABILITIES),
+    (ROUTES[2][0], THANKS),
+    (ROUTES[3][0], NETWORK_GREETING),
+    (ROUTES[4][0], NETWORK_CAPABILITIES),
+)
+
+
+def capabilities() -> str:
+    return NETWORK_CAPABILITIES if settings.dataset == "network" else CAPABILITIES
+
+
+def greeting() -> str:
+    return NETWORK_GREETING if settings.dataset == "network" else GREETING
+
+
 def route(question: str) -> str | None:
     """Return a canned reply for conversational input, or None to carry on."""
     q = question.strip()
     if not q:
         return None
-    for pattern, reply in ROUTES:
+    for pattern, reply in (NETWORK_ROUTES if settings.dataset == "network" else ROUTES):
         if pattern.search(q):
             return reply
     return None

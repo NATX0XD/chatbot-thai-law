@@ -1,0 +1,35 @@
+{"id":"NET-01","group":"book","question":"เครือข่ายคอมพิวเตอร์คืออะไร","expect":["เชื่อม"]}
+{"id":"NET-02","group":"book","question":"แบบจำลอง OSI มีกี่ชั้น","expect":["7"]}
+{"id":"NET-03","group":"book","question":"สายคู่บิดเกลียวคืออะไร มีข้อดีข้อเสียอย่างไร","expect":["ราคาถูก","สัญญาณรบกวน"],"figure":"2.3"}
+{"id":"NET-04","group":"book","question":"สายใยแก้วนำแสงมีข้อเสียอะไรบ้าง","expect":["แพง","ผู้เชี่ยวชาญ"]}
+{"id":"NET-05","group":"book","question":"สายโคแอกเชียลมีข้อดีอะไร","expect":["สัญญาณรบกวน"]}
+{"id":"NET-06","group":"book","question":"บลูทูธส่งสัญญาณได้ไกลประมาณกี่เมตร","expect":["10"]}
+{"id":"NET-07","group":"book","question":"ใครเป็นผู้ประดิษฐ์โทรศัพท์ และเมื่อปีใด","expect":["เบล","1876"]}
+{"id":"NET-08","group":"book","question":"ข้อเสียของ VoIP คืออะไร","expect":["เรียลไทม์"]}
+{"id":"NET-09","group":"book","question":"การเข้าหัวสายแลนตามมาตรฐาน T568B เรียงสีอย่างไร","expect":["ขาวส้ม","ขาวน้ำตาล"]}
+{"id":"NET-10","group":"book","question":"เครือข่ายแบบเวิร์กกรุ๊ปเหมาะกับคอมพิวเตอร์กี่เครื่อง","expect":["20"]}
+{"id":"NET-11","group":"book","question":"เครือข่ายแบบเวิร์กกรุ๊ปต่างจากแบบโดเมนอย่างไร","expect":["เซิร์ฟเวอร์|เชิร์ฟเวอร์"]}
+{"id":"NET-12","group":"book","question":"ฮับทำงานอยู่ในชั้นสื่อสารใดของแบบจำลอง OSI","expect":["กายภาพ"]}
+{"id":"NET-13","group":"book","question":"เร้าเตอร์ทำงานอยู่ในชั้นสื่อสารใด","expect":["ควบคุมเครือข่าย"]}
+{"id":"NET-14","group":"book","question":"IEEE 802.5 คือมาตรฐานอะไร","expect":["โทเค็นริง|Token Ring"]}
+{"id":"NET-15","group":"book","question":"เกณฑ์วัดประสิทธิภาพเครือข่ายมีอะไรบ้าง","expect":["สมรรถนะ","ความน่าเชื่อถือ","ความปลอดภัย"]}
+{"id":"NET-16","group":"book","question":"หมายเลขไอพีคลาส C สำหรับเครือข่ายส่วนตัวอยู่ในช่วงใด","expect":["192.168.0.0","192.168.255.255"]}
+{"id":"NET-17","group":"book","question":"การแมปไดรฟ์คืออะไร","expect":["โฟลเดอร์","ไดรฟ์"]}
+{"id":"NET-18","group":"book","question":"โทโปโลยีแบบดาวใช้อุปกรณ์อะไรเป็นศูนย์กลาง","expect":["ฮับ"],"figure":"3.9"}
+{"id":"NET-19","group":"book","question":"โปรแกรม Alchemy Network Inventory ใช้ทำอะไร","expect":["สต็อก"]}
+{"id":"NET-20","group":"book","question":"สายยูทีพี CAT3 ภายในมีสายทองแดงกี่คู่","expect":["4"]}
+{"id":"NET-21","group":"book","question":"โทโปโลยีแบบวงแหวนมีข้อเสียอย่างไร","expect":[]}
+{"id":"NET-22","group":"book","question":"สร้างสายแลนแบบไขว้ต้องเรียงสีแบบไหน","expect":["T568A","T568B"]}
+{"id":"NET-23","group":"book","question":"ส่วนประกอบของระบบการสื่อสารข้อมูลมีอะไรบ้าง","expect":["ฝ่ายส่ง"]}
+{"id":"NET-24","group":"book","question":"เครือข่ายท้องถิ่นหรือ LAN คืออะไร","expect":[]}
+{"id":"NET-25","group":"beyond","question":"IPv6 มีความยาวกี่บิต","expect":[]}
+{"id":"NET-26","group":"beyond","question":"วิธีตั้งค่า VLAN บนสวิตช์ Cisco ทำอย่างไร","expect":[]}
+{"id":"NET-27","group":"beyond","question":"Wi-Fi 6 เร็วกว่า Wi-Fi 5 เท่าไหร่","expect":[]}
+{"id":"NET-28","group":"beyond","question":"โปรโตคอล BGP ทำงานอย่างไร","expect":[]}
+{"id":"NET-29","group":"beyond","question":"ติดตั้ง Active Directory บน Windows Server 2019 อย่างไร","expect":[]}
+{"id":"NET-30","group":"offtopic","question":"สูตรทำต้มยำกุ้งใส่อะไรบ้าง","expect":[]}
+{"id":"NET-31","group":"offtopic","question":"ครูผิดจรรยาบรรณมีโทษอะไรบ้าง","expect":[]}
+{"id":"NET-32","group":"offtopic","question":"ลาออกจากงานต้องบอกล่วงหน้ากี่วัน","expect":[]}
+{"id":"NET-33","group":"offtopic","question":"วันนี้ฝนจะตกไหม","expect":[]}
+{"id":"NET-34","group":"offtopic","question":"แนะนำหนังน่าดูหน่อย","expect":[]}
+{"id":"NET-35","group":"offtopic","question":"ภาษีเงินได้บุคคลธรรมดาคำนวณยังไง","expect":[]}

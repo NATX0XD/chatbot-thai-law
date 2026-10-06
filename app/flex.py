@@ -27,6 +27,22 @@ LINE_GREY = "#E7EAEE"
 NAVY = "#223C69"
 GOLD = "#B8860B"
 AMBER = "#B26B00"
+# The networking bot: the blue of a patch cable and the cyan of a link light,
+# in place of the navy and gold of a law book.
+BLUE = "#0B4F8A"
+CYAN = "#12B5CB"
+
+# What changes with the dataset an answer was written from: the header colour,
+# the rule beside each reference, and the two fixed lines of text.
+THEMES = {
+    "book": {"accent": BLUE, "mark": CYAN, "references": "อ้างอิงจากหนังสือ",
+             "footer": "สรุปจากหนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น "
+                       "ใช้ทบทวนบทเรียน ควรอ่านเนื้อหาเต็มตามหน้าที่อ้าง",
+             "alt": "คำตอบจากผู้ช่วยวิชาเครือข่ายคอมพิวเตอร์"},
+}
+LAW_THEME = {"accent": NAVY, "mark": GOLD, "references": "อ้างอิงจากตัวบท",
+             "footer": None, "alt": "คำตอบจากผู้ช่วยกฎหมายไทย"}
+BOOK_CITATION = re.compile(r"^(.*?)\s+—\s+(.*)$")
 
 
 def _text(text: str, **kw) -> dict:
@@ -53,15 +69,20 @@ def _split_citation(citation: str) -> tuple[str, str]:
     return citation, ""
 
 
-def _citation_row(citation: str) -> dict:
-    """One statute reference, marked with a gold rule so it reads as evidence."""
+def _citation_row(citation: str, mark: str = GOLD) -> dict:
+    """One reference, marked with a coloured rule so it reads as evidence."""
     act, section = _split_citation(citation)
+    if not section:
+        # a textbook reference: "บทที่ 2 ชื่อบท — หัวข้อ ... (หน้า 42)"
+        chapter = BOOK_CITATION.match(citation)
+        if chapter:
+            act, section = chapter.group(1), chapter.group(2)
     return {
         "type": "box", "layout": "horizontal", "spacing": "sm",
         "paddingAll": "8px", "backgroundColor": "#F7F8FA", "cornerRadius": "6px",
         "contents": [
             {"type": "box", "layout": "vertical", "width": "3px",
-             "backgroundColor": GOLD, "cornerRadius": "2px", "contents": []},
+             "backgroundColor": mark, "cornerRadius": "2px", "contents": []},
             {"type": "box", "layout": "vertical", "flex": 1, "contents": [
                 _text(act or citation, size="xs", color=INK, weight="bold"),
                 _text(section or " ", size="xxs", color=MUTED),
@@ -71,18 +92,20 @@ def _citation_row(citation: str) -> dict:
 
 
 def answer_bubble(answer_text: str, citations: list[str], *,
-                  in_scope: bool = True, heading: str = "คำตอบ") -> dict:
-    accent = NAVY if in_scope else AMBER
+                  in_scope: bool = True, heading: str = "คำตอบ",
+                  source: str = "rules") -> dict:
+    theme = THEMES.get(source, LAW_THEME)
+    accent = theme["accent"] if in_scope else AMBER
     body: list[dict] = [_text(answer_text, size="sm", color=INK)]
 
     if citations:
         body += [
             {"type": "separator", "margin": "lg", "color": LINE_GREY},
-            _text("อ้างอิงจากตัวบท", size="xxs", color=MUTED, margin="lg"),
+            _text(theme["references"], size="xxs", color=MUTED, margin="lg"),
         ]
         # a bubble that lists ten sections is unreadable; three is enough to check
         body += [{"type": "box", "layout": "vertical", "margin": "sm", "spacing": "xs",
-                  "contents": [_citation_row(c) for c in citations[:3]]}]
+                  "contents": [_citation_row(c, theme["mark"]) for c in citations[:3]]}]
         if len(citations) > 3:
             body.append(_text(f"และอีก {len(citations) - 3} รายการ",
                               size="xxs", color=MUTED, margin="sm"))
@@ -102,6 +125,7 @@ def answer_bubble(answer_text: str, citations: list[str], *,
             "type": "box", "layout": "vertical", "paddingAll": "12px",
             "backgroundColor": "#FAFBFC",
             "contents": [_text(
+                theme["footer"] or
                 "ข้อมูลเบื้องต้นจากตัวบทกฎหมาย ไม่ใช่คำปรึกษาทางกฎหมาย "
                 f"คลังข้อมูลปรับปรุงถึงประมาณ {settings.corpus_as_of}",
                 size="xxs", color=MUTED)],
@@ -110,12 +134,15 @@ def answer_bubble(answer_text: str, citations: list[str], *,
 
 
 def answer_message(answer_text: str, citations: list[str], *,
-                   in_scope: bool = True, heading: str = "คำตอบ") -> dict:
+                   in_scope: bool = True, heading: str = "คำตอบ",
+                   source: str = "rules") -> dict:
     """A Flex message; altText is what shows in the chat list and on old clients."""
-    alt = answer_text.strip().split("\n")[0][:90] or "คำตอบจากผู้ช่วยกฎหมายไทย"
+    alt = (answer_text.strip().split("\n")[0][:90]
+           or THEMES.get(source, LAW_THEME)["alt"])
     return {
         "type": "flex",
         "altText": alt,
         "contents": answer_bubble(answer_text, citations,
-                                  in_scope=in_scope, heading=heading),
+                                  in_scope=in_scope, heading=heading,
+                                  source=source),
     }

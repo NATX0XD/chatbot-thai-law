@@ -25,23 +25,29 @@ from app import monitor
 from app.answer import answer_question
 from app.config import settings
 # one wording for the welcome text, shared with the 'สวัสดี' path
-from app.smalltalk import CAPABILITIES, GREETING
+from app.smalltalk import capabilities, greeting
 
 log = logging.getLogger(__name__)
 
-GROUP_GREETING = (
-    "สวัสดีครับ ขอบคุณที่ชวนเข้ากลุ่ม 🙏\n\n"
-    "ในกลุ่มผมจะเงียบไว้ ไม่แทรกทุกข้อความ เรียกใช้ได้ 2 วิธี\n"
-    "1. พิมพ์ @ แล้วเลือกชื่อผม ตามด้วยคำถาม\n"
-    "2. ขึ้นต้นข้อความด้วยคำว่า กฎหมาย เช่น\n"
-    "   กฎหมาย ลาออกต้องบอกล่วงหน้ากี่วัน\n\n"
-    + CAPABILITIES
-)
+def group_greeting() -> str:
+    word = "เครือข่าย" if settings.dataset == "network" else "กฎหมาย"
+    sample = ("เครือข่าย สายคู่บิดเกลียวคืออะไร" if settings.dataset == "network"
+              else "กฎหมาย ลาออกต้องบอกล่วงหน้ากี่วัน")
+    return ("สวัสดีครับ ขอบคุณที่ชวนเข้ากลุ่ม 🙏\n\n"
+            "ในกลุ่มผมจะเงียบไว้ ไม่แทรกทุกข้อความ เรียกใช้ได้ 2 วิธี\n"
+            "1. พิมพ์ @ แล้วเลือกชื่อผม ตามด้วยคำถาม\n"
+            f"2. ขึ้นต้นข้อความด้วยคำว่า {word} เช่น\n"
+            f"   {sample}\n\n"
+            + capabilities())
+
 
 # In a one-to-one chat every message is meant for the bot. In a group it is not:
 # LINE delivers every message posted there, so answering all of them would make
 # the bot unusable. It speaks only when addressed.
-GROUP_TRIGGER = re.compile(r"^\s*(กฎหมาย|บอท|bot)\s*[:：]?\s*", re.I)
+# "เครือข่าย" needs the space or colon after it: unlike "กฎหมาย", it is also
+# how a real question begins ("เครือข่ายแลนคืออะไร").
+GROUP_TRIGGER = re.compile(r"^\s*(?:(?:กฎหมาย|บอท|bot)\s*[:：]?|เครือข่าย(?:\s*[:：]|\s))\s*",
+                           re.I)
 
 
 def chat_target(source: dict) -> str | None:
@@ -139,7 +145,7 @@ async def handle_event(event: dict) -> None:
     # added as a friend, or invited into a group
     if etype in ("follow", "join"):
         if reply_token:
-            await reply(reply_token, GROUP_GREETING if etype == "join" else GREETING)
+            await reply(reply_token, group_greeting() if etype == "join" else greeting())
         return
 
     if etype != "message" or event.get("message", {}).get("type") != "text":
@@ -156,7 +162,7 @@ async def handle_event(event: dict) -> None:
             text = GROUP_TRIGGER.sub("", text, count=1).strip()
         if not text:
             if reply_token:
-                await reply(reply_token, GROUP_GREETING)
+                await reply(reply_token, group_greeting())
             return
         log.info("GROUP %s | %r", "mention" if mentioned else "keyword", text[:60])
 

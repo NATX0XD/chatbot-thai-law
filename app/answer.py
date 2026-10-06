@@ -45,7 +45,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from app import articles
+from app import articles, book
 from app.config import settings
 from app.coverage import answer_beyond_corpus as find_gap_in_answer, find_gap
 from app.flex import answer_message
@@ -222,9 +222,14 @@ class Answer:
     # answer about what the regulations require, and every reader of it -- the
     # person in the chat, the API, the monitor -- has to be able to tell.
     source: str = "rules"
+    # Pictures from the textbook to show under the answer; only the book path
+    # fills this. Each is {number, caption, page, url, width, height}.
+    figures: list[dict] = field(default_factory=list)
 
     @property
     def disclaimer(self) -> str:
+        if self.source == "book":
+            return book.DISCLAIMER
         return articles.DISCLAIMER if self.source == "articles" else DISCLAIMER
 
     def for_line(self) -> str:
@@ -249,7 +254,13 @@ class Answer:
         messages = [{"type": "text", "text": f"{body}\n\n{self.disclaimer}"}]
         if self.citations:
             messages.append(answer_message(body, self.citations,
-                                           in_scope=self.in_scope))
+                                           in_scope=self.in_scope,
+                                           source=self.source))
+        # LINE takes five messages a send; two are used above
+        for figure in self.figures[:3]:
+            url = settings.public_base_url.rstrip("/") + figure["url"]
+            messages.append({"type": "image", "originalContentUrl": url,
+                             "previewImageUrl": url})
         return messages
 
 
@@ -672,6 +683,26 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
 
 
 async def answer_question(question: str) -> Answer:
+    """Answer from whichever dataset this deployment serves."""
+    if settings.dataset == "network":
+        return await answer_from_book(question)
+    if settings.dataset == "ksp":
+        return await answer_from_rules(question)
+    raise RuntimeError(f"DATASET={settings.dataset!r} -- ต้องเป็น network หรือ ksp")
+
+
+async def answer_from_book(question: str) -> Answer:
+    question = (question or "").strip()
+    if not question:
+        return Answer(text=book.EMPTY, in_scope=False, source="book")
+    canned = smalltalk_route(question)
+    if canned:
+        log.info("SMALLTALK | %r", question[:60])
+        return Answer(text=canned, in_scope=False, source="book")
+    return await book.answer(question)
+
+
+async def answer_from_rules(question: str) -> Answer:
     question = (question or "").strip()
     if not question:
         return Answer(text="พิมพ์คำถามเกี่ยวกับกฎหมายมาได้เลยครับ", in_scope=False)
