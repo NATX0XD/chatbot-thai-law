@@ -207,7 +207,7 @@ async def handle_event(event: dict) -> None:
     try:
         answer = await answer_question(text, *previous_question(target))
         if answer.in_scope:
-            remember_question(target, text, answer.text)
+            remember_question(target, answer.topic or text, answer.text)
         body = answer.for_line_messages()
         monitor.finish(entry, answer=answer.text, in_scope=answer.in_scope,
                        faults=answer.faults, repair=answer.repair,

@@ -225,6 +225,9 @@ class Answer:
     # Pictures from the textbook to show under the answer; only the book path
     # fills this. Each is {number, caption, page, url, width, height}.
     figures: list[dict] = field(default_factory=list)
+    # The question this chat is on, to be passed back as `previous` with the
+    # next message; only the book path fills this.
+    topic: str | None = None
 
     @property
     def disclaimer(self) -> str:

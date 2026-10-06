@@ -474,12 +474,13 @@ function newChat() {
   input.focus();
   renderHistory();
 }
-function remember(role, text, sources, figures) {
+function remember(role, text, sources, figures, topic) {
   if (!current) {
     current = { id: Date.now(), title: text.slice(0, 60), ts: Date.now(), messages: [] };
     chats.unshift(current);
   }
-  current.messages.push({ role, text, sources: sources || null, figures: figures || null });
+  current.messages.push({ role, text, sources: sources || null, figures: figures || null,
+                          topic: topic || null });
   current.ts = Date.now();
   save();
   renderHistory();
@@ -709,10 +710,14 @@ async function submit() {
   const retrievalOnly = $('tSearch').classList.contains('on');
 
   // the question before this one, so a follow-up has something to go on from
+  // the server names it (`topic`): after a follow-up it is still the question
+  // that started the thread, not the follow-up itself
   const earlier = current ? current.messages.filter(m => m.role === 'user') : [];
-  const previous = earlier.length ? earlier[earlier.length - 1].text : null;
   const said = current ? current.messages.filter(m => m.role === 'bot') : [];
-  const previous_answer = said.length ? said[said.length - 1].text.slice(0, 6000) : null;
+  const last = said.length ? said[said.length - 1] : null;
+  const previous = (last && last.topic)
+    || (earlier.length ? earlier[earlier.length - 1].text : null);
+  const previous_answer = last ? last.text.slice(0, 6000) : null;
 
   bubble(q, 'me');
   remember('user', q);
@@ -742,7 +747,7 @@ async function submit() {
       if (!d.in_scope) pending.classList.add('warn');
       addFigures(pending, d.figures);
       addSources(pending, d.sources);
-      remember('bot', d.answer, d.sources, d.figures);
+      remember('bot', d.answer, d.sources, d.figures, d.topic);
     }
   } catch (err) {
     pending.textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ' + err.message;

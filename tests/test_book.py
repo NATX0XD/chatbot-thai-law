@@ -398,6 +398,34 @@ def test_a_follow_up_goes_on_instead_of_being_refused(model):
     assert "คำตอบที่ให้ไปแล้ว\nสาย LAN คือสายคู่บิดเกลียว" in sent
 
 
+@needs_index
+def test_a_second_follow_up_still_goes_on_from_the_question_that_started_it(model):
+    """The caller passes `topic` back as `previous`. Were it the follow-up
+    itself, the second "อยากรู้เพิ่มเติมอีก" would be searched for on its own
+    words twice over and refused."""
+    model["reply"] = "สายแลนเป็นสายคู่บิดเกลียวที่ใช้เชื่อมต่อเครือข่าย [1]"
+    first = run(answer_question("สาย Lan คืออะไร"))
+    assert first.topic == "สาย Lan คืออะไร"
+    second = run(answer_question("อยากรู้เพิ่มเติมอีก", first.topic, first.text))
+    assert second.topic == "สาย Lan คืออะไร"
+    third = run(answer_question("อยากรู้เพิ่มเติมอีก", second.topic, second.text))
+    assert third.in_scope and third.citations
+    assert third.topic == "สาย Lan คืออะไร"
+
+
+@needs_index
+def test_a_new_question_moves_the_chat_on_to_it(model):
+    model["reply"] = "แบบจำลอง OSI แบ่งการสื่อสารออกเป็นชั้น [1]"
+    a = run(answer_question("แบบจำลอง OSI คืออะไร", "สาย Lan คืออะไร", "คำตอบเดิม"))
+    assert a.topic == "แบบจำลอง OSI คืออะไร"
+
+
+def test_the_page_is_not_kept_by_the_browser_across_a_deploy():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    assert TestClient(app).get("/").headers["cache-control"] == "no-cache"
+
+
 def test_line_keeps_the_last_question_of_a_chat_for_a_while(monkeypatch):
     from app import line_bot
     monkeypatch.setattr(line_bot, "_last_question", {})

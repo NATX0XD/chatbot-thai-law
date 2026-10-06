@@ -166,6 +166,8 @@ async def chat(req: ChatRequest) -> dict:
         "source": answer.source,
         # pictures from the textbook that belong under this answer
         "figures": answer.figures,
+        # what to send back as `previous` with the next message
+        "topic": answer.topic,
         "error": answer.error,
         # what the guards found on the first draft, and whether the rewrite was
         # accepted. For reading acceptance runs without diffing against the
@@ -264,4 +266,8 @@ if os.path.isdir(WEB_DIR):
         # index.html is the networking bot's page; the Teachers Council page
         # is kept beside it and served when DATASET=ksp
         page = "index.html" if settings.dataset == "network" else "index_ksp.html"
-        return FileResponse(os.path.join(WEB_DIR, page))
+        # no-cache: a page kept by the browser from before a deploy goes on
+        # running the old script, which is how follow-ups arrived without the
+        # question they followed
+        return FileResponse(os.path.join(WEB_DIR, page),
+                            headers={"Cache-Control": "no-cache"})

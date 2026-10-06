@@ -706,7 +706,21 @@ GOING_ON = ("\n\nนักเรียนได้คำตอบข้างล
 
 async def answer(question: str, previous: str | None = None,
                  previous_answer: str | None = None):
-    """An Answer written from the book, or a refusal if no draft holds up."""
+    """An Answer written from the book, or a refusal if no draft holds up.
+
+    The answer carries the question the chat is on, for the caller to hand
+    back as `previous` next time. A follow-up leaves it where it was, so a
+    second "อยากรู้เพิ่มเติมอีก" still goes on from the question that started
+    it rather than from the first "อยากรู้เพิ่มเติมอีก"."""
+    reply = await _answer(question, previous, previous_answer)
+    if with_context(question, previous) != question or not reply.in_scope:
+        reply.topic = previous
+    else:
+        reply.topic = question
+    return reply
+
+
+async def _answer(question: str, previous: str | None, previous_answer: str | None):
     import asyncio
 
     from app.answer import Answer, tidy_for_chat   # answer.py imports this module
