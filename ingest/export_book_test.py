@@ -25,6 +25,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from ingest.plain_notes import plain
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVAL = os.path.join(BASE_DIR, "data", "eval")
 SOURCES = (os.path.join(EVAL, "network_exercise_answers.json"),
@@ -72,7 +74,8 @@ def scored(row: dict, given: dict[str, dict]) -> list:
     if row["id"] not in given:
         raise SystemExit(f"{SCORES} ไม่มีคะแนนของข้อ {row['id']}")
     one = given[row["id"]]
-    return [one["match"], "" if one["rag"] is None else one["rag"], one.get("note", "")]
+    return [one["match"], "" if one["rag"] is None else one["rag"],
+            plain(one.get("note", ""))]
 
 
 def chapter_of(row: dict):

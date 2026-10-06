@@ -15,7 +15,8 @@ from __future__ import annotations
 import os
 import sys
 
-from ingest.assess_book import LABELS, PASS_MARK, answers, score
+from ingest.assess_book import LABELS, PASS_MARK, PER_FILE, answers, score
+from ingest.plain_notes import packet_passages, plain
 from ingest.push_book_test import GREEN, PINK, TEAL, Sheet, fill, token
 
 
@@ -43,10 +44,13 @@ def grid(round_no: int) -> tuple[list[list], int]:
     out.append(["รหัสคำถาม", "บทที่", "ลักษณะคำถาม", "คำถาม", "คำตอบที่ได้",
                 "คนที่ 1", "คนที่ 2", "คนที่ 3", "หมายเหตุคนที่ 1", "หมายเหตุคนที่ 2",
                 "หมายเหตุคนที่ 3"])
-    for item in summary["items"]:
+    for at, item in enumerate(summary["items"]):
         row = rows[item["id"]]
+        # a note names passages by their number in the packet the question was in
+        passages = packet_passages(round_no, at // PER_FILE + 1)
         out.append([item["id"], row["chapter"], row["phrasing"], row["question"],
-                    row["answer"], *item["codes"], *item["notes"]])
+                    row["answer"], *item["codes"],
+                    *(plain(note, passages) for note in item["notes"])])
     out += [[], ["ความหมายของรหัส"]] + [[code, LABELS[code]] for code in (1, 0, 2, 3)]
     return out, head
 

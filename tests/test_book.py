@@ -604,3 +604,22 @@ def test_a_supplement_line_about_the_passages_is_not_general_knowledge():
              "สายไขว้ใช้ต่อคอมพิวเตอร์สองเครื่องเข้าหากันโดยตรง")
     assert book.clean_supplement(extra) == "สายไขว้ใช้ต่อคอมพิวเตอร์สองเครื่องเข้าหากันโดยตรง"
     assert book.clean_supplement("ข้อมูลนี้มาจากหนังสือ ซึ่งระบุชัดเจน") == ""
+
+
+def test_a_note_shown_to_a_reader_names_the_page_not_the_chunk():
+    from ingest.plain_notes import plain
+    passages = {"P3": (1, 16, 17), "P4": (1, 17, 18), "P19": (3, 87, 88)}
+    assert plain("ตรงกับ P19 (บทที่ 3 หน้า 87-88) ครบ", passages) == \
+        "ตรงกับ หนังสือบทที่ 3 หน้า 87-88 ครบ"
+    assert plain("ประโยชน์ตรงกับ P3 P4", passages) == "ประโยชน์ตรงกับ หนังสือบทที่ 1 หน้า 16-18"
+    with pytest.raises(SystemExit):
+        plain("ตรงกับ P99", passages)
+
+
+@needs_index
+def test_a_chunk_id_in_a_note_becomes_its_chapter_and_pages():
+    from ingest.plain_notes import plain
+    rec = book.get_index().corpus[10]
+    shown = plain(f"ตรงกับ {rec['id']}")
+    assert rec["id"] not in shown
+    assert shown.startswith(f"ตรงกับ หนังสือบทที่ {rec['chapter']} หน้า {rec['page_from']}")
