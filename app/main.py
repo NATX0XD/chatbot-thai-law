@@ -247,6 +247,14 @@ async def line_webhook(request: Request, background: BackgroundTasks,
 if os.path.isdir(WEB_DIR):
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> FileResponse:
+        # A browser asks for this path on its own, whatever the page links to.
+        # The logo has its own file name per dataset so that a browser holding
+        # the old icon under an old address does not go on showing it.
+        logo = "logo-network.png" if settings.dataset == "network" else "logo_ksp.png"
+        return FileResponse(os.path.join(WEB_DIR, logo), media_type="image/png")
+
     @app.get("/")
     async def index() -> FileResponse:
         # index.html is the networking bot's page; the Teachers Council page

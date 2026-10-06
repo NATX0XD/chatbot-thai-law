@@ -94,7 +94,7 @@ repo นี้เป็น public
 | `data/processed/corpus_network.jsonl` / `corpus_network_SOURCES.md` | `python -m ingest.extract_book` |
 | `data/index/network_*` | `python -m ingest.build_book_index` |
 | `web/figures/*` / `data/processed/figures_network.json` | `python -m ingest.extract_figures` (ต้องใช้ macOS) |
-| `assets/network/*.png` / `web/logo.png` | เรนเดอร์จาก `assets/network/logo.html` และ `richmenu.html` |
+| `assets/network/*.png` / `web/logo-network.png` | เรนเดอร์จาก `assets/network/logo.html` และ `richmenu.html` |
 
 แก้ที่สคริปต์ แล้วสร้างใหม่ เสมอ
 
