@@ -9,7 +9,9 @@ Reads data/eval/network_questions.jsonl, writes data/eval/network_answers.json.
   book      passes when it is answered, every expected string is in the answer
             ("a|b" means either spelling), and the expected figure, if one is
             named, comes back with it
-  beyond    passes when it is refused: the book does not cover it
+  beyond    passes when it is not answered as the book's: either refused, or
+            answered from the model's own knowledge and labelled so
+            (source "model")
   offtopic  passes when it is refused
 
 That is a floor, not a verdict. A string check cannot see a correct word in a
@@ -51,11 +53,14 @@ def main() -> None:
             if case.get("figure") and case["figure"] not in shown:
                 missing.append(f"รูปที่ {case['figure']}")
             passed = bool(reply.get("in_scope")) and not missing
+        elif case["group"] == "beyond":
+            missing = []
+            passed = not reply.get("in_scope") or reply.get("source") == "model"
         else:
             missing = []
             passed = not reply.get("in_scope")
         results.append({**case, "answer": text, "in_scope": reply.get("in_scope"),
-                        "error": reply.get("error"), "figures": shown,
+                        "source": reply.get("source"), "error": reply.get("error"), "figures": shown,
                         "citations": [s["citation"] for s in reply.get("sources", [])][:3],
                         "missing": missing, "passed": passed})
         print(f"{'ผ่าน' if passed else 'ตก  '} {case['id']} {case['group']:8s}"

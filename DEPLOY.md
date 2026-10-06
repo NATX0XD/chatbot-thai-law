@@ -56,7 +56,7 @@ cosine จะเลื่อนหมด เกณฑ์ `min_dense_sim = 0.54` 
 และอาการจะออกมาเป็น "ตอบแย่ลง" เงียบ ๆ ไม่ใช่ error
 
 ```bash
-cd ~/thai-law-bot
+cd ~/network-basics-bot
 EMBED_API_KEY=<token> \
 EMBED_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1 \
 EMBED_API_MODEL='@cf/baai/bge-m3' \
@@ -74,14 +74,14 @@ EMBED_API_MODEL='@cf/baai/bge-m3' \
 commit แรกทำไว้แล้วในเครื่อง ยังไม่ได้ push ที่ไหน
 
 ```bash
-cd ~/thai-law-bot
-gh repo create thai-law-bot --private --source=. --remote=origin --push
+cd ~/network-basics-bot
+gh repo create network-basics-bot --private --source=. --remote=origin --push
 ```
 
 หรือถ้าสร้าง repo เองผ่านเว็บ
 
 ```bash
-git remote add origin https://github.com/<user>/thai-law-bot.git
+git remote add origin https://github.com/<user>/network-basics-bot.git
 git branch -M main && git push -u origin main
 ```
 
@@ -209,11 +209,11 @@ service จะไม่ตายแต่ตอบไม่ได้ ดูโ�
 ## รันในเครื่องแบบเดียวกับบน Render
 
 ```bash
-docker build -t thai-law-bot .
+docker build -t network-basics-bot .
 docker run --rm -p 8000:8000 --memory 512m --cpus 0.1 \
   -e EMBED_API_KEY=... \
   -e EMBED_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1 \
   -e TYPHOON_API_KEY=... \
   -e LINE_CHANNEL_SECRET=... -e LINE_CHANNEL_ACCESS_TOKEN=... \
-  thai-law-bot
+  network-basics-bot
 ```

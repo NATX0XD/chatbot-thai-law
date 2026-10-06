@@ -183,3 +183,37 @@ def test_a_caption_with_no_room_above_it_gives_no_figure():
              ("รูปที่ 2.3 สายคู่บิดเกลียว", 0.30, 0.50, 0.40, 0.02)]
     assert fig.locate(lines, "2", "3") is None
     assert fig.locate(lines, "2", "30") is None
+
+
+def test_a_photograph_is_found_and_a_paragraph_is_not():
+    import numpy as np
+    page = np.full((1000, 800), 255, dtype=np.uint8)
+    for y in range(120, 300, 20):            # nine lines of text
+        page[y:y + 9, 100:700:2] = 0
+    page[400:650, 200:600] = 120             # a photograph
+    assert fig.photo_blocks(page) == [(200, 400, 600, 650)]
+
+
+def test_text_beside_a_photograph_is_not_part_of_it():
+    import numpy as np
+    page = np.full((1000, 800), 255, dtype=np.uint8)
+    for y in range(420, 600, 40):            # a short list to the left
+        page[y:y + 9, 100:220:2] = 0
+    page[400:650, 300:650] = 120
+    assert fig.photo_blocks(page) == [(300, 400, 650, 650)]
+
+
+def test_a_photograph_is_filed_under_the_step_printed_above_it():
+    lines = [("ขั้นตอนที่ 2", 0.1, 0.10, 0.2, 0.02),
+             ("ขั้นตอนที่ 3", 0.1, 0.30, 0.2, 0.02),
+             ("นำมาจัดเรียงสี ดังนี้", 0.1, 0.33, 0.4, 0.02),
+             ("ข้อความใต้รูป", 0.1, 0.80, 0.4, 0.02)]
+    assert fig.step_above(lines, 0.40) == "ขั้นตอนที่ 3 นำมาจัดเรียงสี ดังนี้"
+
+
+def test_a_block_with_no_step_above_it_is_not_kept():
+    lines = [("ย่อหน้าธรรมดาที่ไม่ใช่ขั้นตอน", 0.1, 0.10, 0.8, 0.02)]
+    assert fig.step_above(lines, 0.40) == ""
+    captioned = [("1. ขั้นแรก", 0.1, 0.10, 0.3, 0.02),
+                 ("รูปที่ 4.1 อุปกรณ์พื้นฐาน", 0.1, 0.30, 0.5, 0.02)]
+    assert fig.step_above(captioned, 0.40) == ""

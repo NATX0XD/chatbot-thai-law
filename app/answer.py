@@ -48,7 +48,7 @@ from dataclasses import dataclass, field
 from app import articles, book
 from app.config import settings
 from app.coverage import answer_beyond_corpus as find_gap_in_answer, find_gap
-from app.flex import answer_message
+from app.flex import answer_message, figures_message
 from app.llm import LLMUnavailable, complete
 from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
@@ -230,6 +230,8 @@ class Answer:
     def disclaimer(self) -> str:
         if self.source == "book":
             return book.DISCLAIMER
+        if self.source == "model":
+            return book.MODEL_DISCLAIMER
         return articles.DISCLAIMER if self.source == "articles" else DISCLAIMER
 
     def for_line(self) -> str:
@@ -256,11 +258,8 @@ class Answer:
             messages.append(answer_message(body, self.citations,
                                            in_scope=self.in_scope,
                                            source=self.source))
-        # LINE takes five messages a send; two are used above
-        for figure in self.figures[:3]:
-            url = settings.public_base_url.rstrip("/") + figure["url"]
-            messages.append({"type": "image", "originalContentUrl": url,
-                             "previewImageUrl": url})
+        if self.figures:
+            messages.append(figures_message(self.figures, settings.public_base_url))
         return messages
 
 

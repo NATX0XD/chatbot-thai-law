@@ -146,3 +146,34 @@ def answer_message(answer_text: str, citations: list[str], *,
                                   in_scope=in_scope, heading=heading,
                                   source=source),
     }
+
+
+def _figure_bubble(figure: dict, base_url: str) -> dict:
+    url = base_url.rstrip("/") + figure["url"]
+    # Flex refuses a ratio taller than 1:3; nothing cut from the book comes close
+    ratio = f"{max(1, figure['width'])}:{max(1, figure['height'])}"
+    label = (f"รูปที่ {figure['number']} {figure['caption']}"
+             if figure.get("kind", "figure") == "figure" else figure["caption"])
+    return {
+        "type": "bubble", "size": "kilo",
+        "hero": {"type": "image", "url": url, "size": "full", "aspectRatio": ratio,
+                 "aspectMode": "fit", "backgroundColor": "#FFFFFF",
+                 "action": {"type": "uri", "uri": url}},
+        "body": {"type": "box", "layout": "vertical", "paddingAll": "12px",
+                 "contents": [
+                     _text(label[:160], size="xs", color=INK),
+                     _text(f"หน้า {figure['page']}", size="xxs", color=MUTED, margin="sm"),
+                 ]},
+    }
+
+
+def figures_message(figures: list[dict], base_url: str) -> dict:
+    """The answer's pictures as one swipeable row, each with what it shows.
+
+    One message rather than one per picture: LINE takes five messages a send,
+    and the eight steps of crimping a plug are eight photographs.
+    """
+    bubbles = [_figure_bubble(f, base_url) for f in figures[:12]]
+    return {"type": "flex", "altText": f"รูปประกอบจากหนังสือ {len(bubbles)} รูป",
+            "contents": bubbles[0] if len(bubbles) == 1
+            else {"type": "carousel", "contents": bubbles}}

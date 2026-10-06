@@ -275,7 +275,8 @@
   .chips button:hover { border-color: #b9d7ec; color: var(--ink); }
 
   /* figures from the book, shown under the answer that cites their page */
-  .figs { display: grid; gap: 10px; margin-top: 12px; }
+  .figs { display: grid; gap: 10px; margin-top: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
   .figs figure { margin: 0; background: #fff; border: 1px solid var(--line);
     border-radius: var(--r-sm); overflow: hidden; }
   .figs img { display: block; width: 100%; height: auto; }
@@ -679,7 +680,9 @@ function addFigures(el, figures) {
     img.height = f.height;
     img.onload = () => { scroll.scrollTop = scroll.scrollHeight; };
     const cap = document.createElement('figcaption');
-    cap.textContent = `รูปที่ ${f.number} ${f.caption} (หน้า ${f.page})`;
+    // a step photograph has no figure number, only the step printed above it
+    cap.textContent = (f.kind === 'photo' ? f.caption : `รูปที่ ${f.number} ${f.caption}`) +
+      ` (หน้า ${f.page})`;
     fig.append(img, cap);
     box.appendChild(fig);
   });

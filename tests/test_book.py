@@ -166,35 +166,89 @@ def test_an_item_the_book_numbers_two_ways_is_not_reordered():
 # --------------------------------------------------------------- figures
 
 def test_the_figure_shown_is_the_one_the_question_is_about():
-    shown = book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE], FIGURES)
+    shown = book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE], [CABLE], FIGURES)
     assert [f["number"] for f in shown] == ["2.3"]
     assert shown[0]["url"] == "/static/figures/fig-2-3.jpg"
     assert shown[0]["page"] == 42
 
 
 def test_a_word_every_caption_shares_does_not_bring_the_wrong_figure():
-    shown = book.pick_figures("สายโคแอกเชียลมีข้อดีอะไร", [CABLE], FIGURES)
+    shown = book.pick_figures("สายโคแอกเชียลมีข้อดีอะไร", [CABLE], [CABLE], FIGURES)
     assert [f["number"] for f in shown] == ["2.5"]
 
 
 def test_a_question_about_none_of_the_figures_gets_none():
-    assert book.pick_figures("บลูทูธส่งสัญญาณได้ไกลกี่เมตร", [CABLE], FIGURES) == []
-    assert book.pick_figures("สายคู่บิดเกลียวคืออะไร", [], FIGURES) == []
+    assert book.pick_figures("บลูทูธส่งสัญญาณได้ไกลกี่เมตร", [CABLE], [CABLE], FIGURES) == []
+    assert book.pick_figures("สายคู่บิดเกลียวคืออะไร", [], [], FIGURES) == []
 
 
 def test_a_figure_with_no_file_is_left_out():
-    assert book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE], {}) == []
+    assert book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE], [CABLE], {}) == []
 
 
-def test_a_figure_goes_to_line_as_an_image_with_a_full_address(monkeypatch):
+def test_a_figure_from_another_chapter_is_not_shown():
+    # "การเข้าหัว lan" cited chapter 4 and was shown รูปที่ 3.25, a coaxial
+    # cable, because a chapter 3 passage was among those retrieved
+    crimp = hit("ขั้นตอนที่ 3 นำมาจัดเรียงสี", chapter=4, pages=(126, 129),
+                heading="ขั้นตอนการสร้างสายแลนชนิด RJ-45")
+    coax = hit("รูปที่ 3.25 สายโคแอกเชียล", chapter=3, pages=(99, 99), figures=("3.25",))
+    figures = {"3.25": {"file": "fig-3-25.jpg", "page": 99, "width": 800, "height": 300,
+                        "caption": "สายโคแอกเชียล RG-58 A/U ที่เข้าหัวปลั๊กแบบ BNC"}}
+    assert book.pick_figures("การเข้าหัว lan", [crimp], [crimp, coax], figures) == []
+    assert book.pick_figures("การเข้าหัว lan", [coax], [crimp, coax], figures) != []
+
+
+def photo(page, order, caption):
+    return {"key": f"p{page}-{order}", "file": f"photo-{page}-{order}.jpg", "page": page,
+            "caption": caption, "kind": "photo", "width": 500, "height": 400}
+
+
+def test_step_photographs_come_with_the_pages_the_answer_cites():
+    crimp = hit("ขั้นตอนที่ 3 นำมาจัดเรียงสี", chapter=4, pages=(126, 127))
+    photos = {125: [photo(125, 1, "ขั้นตอนที่ 1 ปอกเปลือก")],
+              126: [photo(126, 1, "ขั้นตอนที่ 2 แยกสาย"),
+                    photo(126, 2, "ขั้นตอนที่ 3 นำมาจัดเรียงสี ดังนี้ (มาตรฐาน T568B)")],
+              127: [photo(127, 1, "ขั้นตอนที่ 4 นำคีมย้ำหัว RJ-45 มา")]}
+    shown = book.pick_figures("การเข้าหัว lan", [crimp], [crimp], {}, photos=photos)
+    assert [f["number"] for f in shown] == ["p126-1", "p126-2", "p127-1"]
+    assert shown[1]["kind"] == "photo" and shown[1]["page"] == 126
+    assert shown[1]["url"] == "/static/figures/photo-126-2.jpg"
+    assert book.pick_figures("การเข้าหัว lan", [], [crimp], {}, photos=photos) == []
+
+
+def test_when_there_are_too_many_step_photographs_the_asked_about_ones_stay():
+    long = hit("ขั้นตอน", chapter=5, pages=(180, 180))
+    photos = {180: [photo(180, i, f"{i}. คลิกปุ่ม Next") for i in range(1, 12)]
+              + [photo(180, 12, "12. เลือกสิทธิ์ Read")]}
+    shown = book.pick_figures("สิทธิ์ Read ตั้งตรงไหน", [long], [long], {}, photos=photos)
+    assert len(shown) == book.MAX_PHOTOS
+    assert shown[-1]["number"] == "p180-12", "the step asked about is kept"
+    assert [f["number"] for f in shown[:2]] == ["p180-1", "p180-2"], "in the book's order"
+
+
+def test_figures_go_to_line_as_one_carousel_with_full_addresses(monkeypatch):
     from app.answer import Answer
     monkeypatch.setattr(settings, "public_base_url", "https://bot.example/")
-    shown = book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE], FIGURES)
+    crimp = hit("ขั้นตอนที่ 3", chapter=2, pages=(42, 42))
+    photos = {42: [photo(42, 1, "ขั้นตอนที่ 3 นำมาจัดเรียงสี")]}
+    shown = book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE, crimp], [CABLE], FIGURES,
+                              photos=photos)
     messages = Answer(text="คำตอบ", citations=[CABLE.citation], source="book",
                       figures=shown).for_line_messages()
-    assert [m["type"] for m in messages] == ["text", "flex", "image"]
-    assert messages[2]["originalContentUrl"] == "https://bot.example/static/figures/fig-2-3.jpg"
+    assert [m["type"] for m in messages] == ["text", "flex", "flex"]
+    bubbles = messages[2]["contents"]["contents"]
+    assert [b["hero"]["url"] for b in bubbles] == [
+        "https://bot.example/static/figures/fig-2-3.jpg",
+        "https://bot.example/static/figures/photo-42-1.jpg"]
+    assert bubbles[0]["body"]["contents"][0]["text"] == "รูปที่ 2.3 สายคู่บิดเกลียว"
+    assert bubbles[1]["body"]["contents"][0]["text"] == "ขั้นตอนที่ 3 นำมาจัดเรียงสี"
     assert "คู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น" in messages[0]["text"]
+
+
+def test_one_figure_is_a_single_card_not_a_carousel():
+    from app.flex import figures_message
+    shown = book.pick_figures("สายคู่บิดเกลียวคืออะไร", [CABLE], [CABLE], FIGURES)
+    assert figures_message(shown, "https://bot.example")["contents"]["type"] == "bubble"
 
 
 # ------------------------------------------------------------ appearance
@@ -269,13 +323,30 @@ def test_a_question_about_something_else_never_reaches_the_model(model):
 
 
 @needs_index
-def test_a_made_up_figure_turns_the_answer_into_a_refusal(model):
-    model["reply"] = "สายคู่บิดเกลียวเชื่อมโยงได้ไกลสุด 18500 เมตร [1]"
-    a = run(answer_question("สายคู่บิดเกลียวเชื่อมได้ไกลกี่เมตร"))
-    assert not a.in_scope
+def test_a_made_up_figure_never_reaches_the_reader_as_the_books(model):
+    # Until 2026-10-06 this draft became a plain refusal. The owner then asked
+    # for the model's own knowledge to fill in where the book cannot be used,
+    # so the question is asked again without the passages -- and whatever comes
+    # back is printed as the model's, never with a page of the book beside it.
+    replies = ["สายคู่บิดเกลียวเชื่อมโยงได้ไกลสุด 18500 เมตร [1]",
+               "โดยทั่วไปสายคู่บิดเกลียวเชื่อมได้ไกลราวหนึ่งร้อยเมตรครับ"]
+
+    async def two(system, user):
+        model["calls"].append(system)
+        return replies[len(model["calls"]) - 1]
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(book, "complete", two)
+    try:
+        a = run(answer_question("สายคู่บิดเกลียวเชื่อมได้ไกลกี่เมตร"))
+    finally:
+        mp.undo()
     assert "18500" not in a.text
+    assert a.source == "model" and a.citations == [] and a.figures == []
+    assert a.text.startswith(book.UNVERIFIED_NOTICE)
+    assert "(บทที่" not in a.text.split("หัวข้อที่ใกล้เคียงที่สุดในหนังสือ")[0]
     assert "หัวข้อที่ใกล้เคียงที่สุดในหนังสือ" in a.text
-    assert a.figures == []
+    assert model["calls"][1] == book.GENERAL_PROMPT
 
 
 @needs_index
@@ -294,10 +365,65 @@ def test_an_answer_with_no_pointers_is_asked_for_once_more(model, monkeypatch):
 
 
 @needs_index
-def test_a_made_up_figure_is_not_given_a_second_try(model):
+def test_a_made_up_figure_is_not_given_a_second_try_at_the_passages(model):
     model["reply"] = "สายคู่บิดเกลียวเชื่อมโยงได้ไกลสุด 18500 เมตร [1]"
-    run(answer_question("สายคู่บิดเกลียวเชื่อมได้ไกลกี่เมตร"))
-    assert len(model["calls"]) == 1
+    a = run(answer_question("สายคู่บิดเกลียวเชื่อมได้ไกลกี่เมตร"))
+    systems = [c["system"] for c in model["calls"]]
+    assert systems == [book.SYSTEM_PROMPT, book.GENERAL_PROMPT]
+    assert "(บทที่" not in a.text.split("หัวข้อที่ใกล้เคียงที่สุดในหนังสือ")[0]
+
+
+# ------------------------------------------- the model's own knowledge
+
+def test_what_the_model_adds_is_split_from_what_the_book_says():
+    raw = "สายมีราคาถูก [1]\nเสริม:\nสาย CAT6 รองรับความเร็วสูงกว่า"
+    assert book.split_supplement(raw) == ("สายมีราคาถูก [1]",
+                                          "สาย CAT6 รองรับความเร็วสูงกว่า")
+    assert book.split_supplement("สายมีราคาถูก [1]") == ("สายมีราคาถูก [1]", "")
+
+
+def test_a_supplement_cannot_carry_a_reference_to_the_book():
+    assert book.clean_supplement("IPv6 ยาว 128 บิต [2]") == "IPv6 ยาว 128 บิต"
+    assert book.clean_supplement("ไม่มีข้อมูลพอ") == ""
+
+
+@needs_index
+def test_an_addition_is_printed_under_the_label_and_outside_the_guards(model):
+    model["reply"] = ("สายคู่บิดเกลียวเป็นสายสัญญาณที่มีราคาถูก [1]\n"
+                      "เสริม:\nสาย CAT6 รองรับความเร็ว 10000 เมกะบิตต่อวินาทีในระยะสั้น")
+    a = run(answer_question("สายคู่บิดเกลียวคืออะไร มีข้อดีข้อเสียอย่างไร"))
+    assert a.in_scope and a.source == "book" and a.citations
+    above, below = a.text.split(book.SUPPLEMENT_LABEL)
+    assert "(บทที่ 2 หน้า" in above and "CAT6" not in above
+    assert "CAT6" in below and "บทที่" not in below
+
+
+@needs_index
+def test_a_networking_question_the_book_lacks_is_answered_as_the_models_own(model):
+    replies = ["ไม่มีข้อมูลพอ", "IPv6 มีความยาว 128 บิตครับ"]
+
+    async def two(system, user):
+        model["calls"].append(system)
+        return replies[len(model["calls"]) - 1]
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(book, "complete", two)
+    try:
+        a = run(answer_question("IPv6 มีความยาวกี่บิต"))
+    finally:
+        mp.undo()
+    assert a.source == "model" and a.in_scope
+    assert a.text.startswith(book.MODEL_NOTICE) and "128" in a.text
+    assert a.citations == [] and a.figures == []
+    assert a.disclaimer == book.MODEL_DISCLAIMER
+    assert model["calls"][1] == book.GENERAL_PROMPT
+
+
+@needs_index
+def test_when_the_model_knows_nothing_either_it_is_still_a_refusal(model):
+    model["reply"] = "ไม่มีข้อมูลพอ"
+    a = run(answer_question("IPv6 มีความยาวกี่บิต"))
+    assert not a.in_scope and len(model["calls"]) == 2
 
 
 def test_a_pile_of_references_is_cut_to_two():
@@ -323,5 +449,7 @@ def test_every_figure_a_passage_names_has_a_caption_on_record():
     index = book.get_index()
     named = {n for rec in index.corpus for n in rec.get("figures", [])}
     assert named, "no passage names a figure"
+    assert index.photos, "no step photographs were loaded"
+    assert all(i["kind"] == "photo" for group in index.photos.values() for i in group)
     unknown = {n for n in index.figures if n not in named}
     assert not unknown, f"figures cut from the PDF that no passage captions: {unknown}"

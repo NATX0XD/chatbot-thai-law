@@ -17,10 +17,12 @@ the answer to the book by other means, the same ones app/articles.py uses:
   by the model             the model was given, and picked by how much of the
                            caption the question is about.
 
-A question the book does not cover is refused, naming the nearest sections. The
-cosine gate catches what is not about networking at all; a networking question
-the book never reaches (IPv6, VLAN) passes that gate, and is caught by the model
-saying it has nothing and by the guards above when it does not say so.
+The cosine gate refuses what is not about networking at all. A networking
+question the book never reaches (IPv6, VLAN) passes that gate; the guards above
+keep it from being answered as if the book had said it, and it is then answered
+from the model's own knowledge under a fixed label saying exactly that. The
+same label separates anything the model adds to an answer the book does give.
+What is the book's and what is the model's never share a line.
 """
 from __future__ import annotations
 
@@ -50,6 +52,10 @@ FIGURES_PATH = os.path.join(PROCESSED_DIR, "figures_network.json")
 FIGURES_URL = "/static/figures/"
 TOP_K = 6
 MAX_FIGURES = 2
+# Step photographs: from how many of the cited passages, and how many at most.
+# LINE shows them in one carousel, which holds twelve.
+PHOTO_PASSAGES = 2
+MAX_PHOTOS = 8
 FIGURE_COVER = 0.5
 FIGURE_NEAR_BEST = 0.9
 # words that ask rather than name; they say nothing about which figure is meant
@@ -75,14 +81,46 @@ UNANSWERED = (
     "เรื่องนี้ผมหาคำตอบที่ยืนยันกับหนังสือไม่ได้ จึงไม่ตอบ เพราะไม่อยากเดาครับ "
     "อาจเป็นเรื่องที่หนังสือเล่มนี้ไม่ได้อธิบายไว้ หรือลองถามให้เจาะจงขึ้นได้ครับ")
 
+# The model may add what the book does not say, under this word on a line of
+# its own. Everything above it is held to the book by the guards below;
+# everything under it is the model's own knowledge and is printed under a
+# label, written here and not by the model, that says so.
+SUPPLEMENT_MARK = "เสริม:"
+SUPPLEMENT_LINE = re.compile(r"(?m)^\s*(?:ส่วน)?เสริม\s*[:：]\s*")
+SUPPLEMENT_LABEL = ("💡 เสริมจากความรู้ทั่วไปของ AI (ส่วนนี้ไม่ได้มาจากหนังสือ "
+                    "ควรตรวจกับครูผู้สอนหรือแหล่งอื่นประกอบ)")
+MODEL_NOTICE = ("เรื่องนี้หนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้นไม่ได้อธิบายไว้ "
+                "คำตอบต่อไปนี้มาจากความรู้ทั่วไปของ AI ไม่ได้มาจากหนังสือ "
+                "ควรตรวจกับครูผู้สอนหรือแหล่งอื่นประกอบ")
+# When a draft was thrown out by a guard rather than by the model saying the
+# book has nothing: the book may cover this, so the notice does not say it
+# does not -- only that this answer could not be held to it.
+UNVERIFIED_NOTICE = ("ผมยืนยันคำตอบเรื่องนี้กับหนังสือคู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้นไม่ได้ "
+                     "คำตอบต่อไปนี้มาจากความรู้ทั่วไปของ AI ไม่ได้มาจากหนังสือ "
+                     "ควรตรวจกับครูผู้สอนหรือเปิดหนังสือตามหัวข้อท้ายคำตอบประกอบ")
+MODEL_DISCLAIMER = ("ℹ️ คำตอบนี้มาจากความรู้ทั่วไปของ AI ไม่ได้อ้างอิงหนังสือ "
+                    "อาจคลาดเคลื่อนหรือไม่เป็นปัจจุบัน")
+MAX_SUPPLEMENT = 900
+
+GENERAL_PROMPT = f"""คุณคือผู้ช่วยสอนวิชาเครือข่ายคอมพิวเตอร์ สำหรับนักเรียนระดับ ปวช. ตอบผ่านแอปแชท LINE
+
+คำถามต่อไปนี้ไม่มีคำตอบในหนังสือเรียนของนักเรียน ให้ตอบจากความรู้ทั่วไปของคุณ
+
+กติกา
+1. ตอบเฉพาะเรื่องเครือข่ายคอมพิวเตอร์ การสื่อสารข้อมูล และการใช้งานคอมพิวเตอร์บนเครือข่าย
+   ถ้าคำถามไม่ใช่เรื่องเหล่านี้ ให้ตอบเพียงว่า {NO_ANSWER}
+2. เขียนเฉพาะสิ่งที่มั่นใจ ถ้าไม่แน่ใจ หรือเป็นข้อมูลที่เปลี่ยนตามเวลา เช่น ราคา รุ่นล่าสุด ให้บอกตรง ๆ ว่าไม่แน่ใจ
+3. ห้ามอ้างเลขบทหรือเลขหน้าของหนังสือ และห้ามใส่หมายเลข [1] [2]
+4. เขียนภาษาไทยที่นักเรียนอ่านเข้าใจง่าย เริ่มด้วยคำตอบตรง ๆ ไม่เกิน 10 บรรทัด
+5. ห้ามใช้ ** ## หรือตาราง ใช้ • นำหน้ารายการได้ ลงท้ายประโยคสุดท้ายด้วยคำว่า ครับ"""
+
 SYSTEM_PROMPT = f"""คุณคือผู้ช่วยทบทวนบทเรียนวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น สำหรับนักเรียนระดับ ปวช. ตอบผ่านแอปแชท LINE
 
 คุณจะได้รับคำถาม และข้อความจากหนังสือ{BOOK}ที่ค้นมาให้ แต่ละชิ้นมีหมายเลข [1] [2] ...
 
 กติกา
 1. ตอบจากข้อความที่ให้มาเท่านั้น ห้ามเติมจากความรู้เดิม แม้จะมั่นใจว่าถูก
-   ห้ามเพิ่มเหตุผล ตัวอย่าง ข้อเปรียบเทียบ ข้อสรุป หรือคำแนะนำที่ข้อความไม่ได้เขียนไว้ แม้จะเป็นความจริง
-   ถ้าคำถามถามเหตุผลหรือรายละเอียดที่ข้อความไม่ได้บอก ให้ตอบเท่าที่ข้อความเขียน แล้วบอกว่าหนังสือไม่ได้อธิบายส่วนที่เหลือ
+   เหตุผล ตัวอย่าง หรือคำอธิบายที่ข้อความไม่ได้เขียนไว้ ห้ามปนอยู่ในคำตอบส่วนนี้
 2. ทุกประโยคที่เป็นเนื้อหา ต้องลงท้ายด้วยหมายเลขของชิ้นที่ใช้ เช่น [1] หรือ [2]
    ห้ามเขียนเลขบทหรือเลขหน้าเอง ระบบจะใส่ให้จากหมายเลขชิ้น
 3. ตัวเลข ชื่อมาตรฐาน ชื่อเมนู และชื่อปุ่ม ให้คัดตามข้อความที่ให้มาทุกตัวอักษร ห้ามเปลี่ยน ห้ามเติมค่าที่ไม่ได้เขียนไว้
@@ -91,7 +129,13 @@ SYSTEM_PROMPT = f"""คุณคือผู้ช่วยทบทวนบท
 6. เขียนภาษาไทยที่นักเรียนอ่านเข้าใจง่าย เริ่มด้วยคำตอบตรง ๆ 1-2 ประโยค แล้วขยายเท่าที่จำเป็น ไม่เกิน 12 บรรทัด
 7. ห้ามใช้ ** ## หรือตาราง เพราะแสดงผลไม่ได้ ใช้ • นำหน้ารายการได้
 8. ลงท้ายประโยคสุดท้ายของคำตอบด้วยคำว่า ครับ ถ้าต้องเรียกตัวเองให้ใช้คำว่า ผม
-9. ห้ามเขียนบรรทัดปิดท้ายที่ไม่ใช่เนื้อหา เช่น บอกว่าสรุปให้แล้ว หรืออธิบายว่าเข้าใจคำถามอย่างไร"""
+9. ห้ามเขียนบรรทัดปิดท้ายที่ไม่ใช่เนื้อหา เช่น บอกว่าสรุปให้แล้ว หรืออธิบายว่าเข้าใจคำถามอย่างไร
+10. ส่วนเสริม ใช้เฉพาะเมื่อคำถามถามสิ่งที่ข้อความจากหนังสือไม่ได้ตอบจริง ๆ เช่น ถามเหตุผลแต่หนังสือบอกแค่วิธีทำ
+    หรือถามถึงเทคโนโลยีที่หนังสือไม่ได้กล่าวถึง คำถามส่วนใหญ่หนังสือตอบครบแล้ว และต้องไม่มีส่วนเสริม
+    ห้ามใช้ส่วนเสริมเพื่อขยายความ ยกตัวอย่าง หรือสรุปซ้ำสิ่งที่หนังสือตอบไว้แล้ว
+    ถ้าต้องมี ให้ขึ้นบรรทัดใหม่ เขียนคำว่า {SUPPLEMENT_MARK} ไว้บรรทัดเดียว แล้วเขียนต่อจากนั้นไม่เกิน 4 บรรทัด
+    ไม่ต้องใส่หมายเลขชิ้น เขียนเฉพาะสิ่งที่มั่นใจ ถ้าไม่แน่ใจให้บอกว่าไม่แน่ใจ
+    ถ้าหนังสือไม่ได้ตอบคำถามเลย ให้เขียน {NO_ANSWER} แล้วตามด้วยส่วนเสริมได้"""
 
 # every run of digits, with the decimals and the dotted parts of a standard's
 # name kept on: 802.11, 2.4, 1,000
@@ -168,9 +212,16 @@ class BookIndex(ArticleIndex):
         self.embedder = None
         # Absent is a state: the book answers without its pictures. Logged once.
         self.figures: dict[str, dict] = {}
+        # uncaptioned step photographs, by the page they are printed on
+        self.photos: dict[int, list[dict]] = {}
         if os.path.exists(FIGURES_PATH):
             with open(FIGURES_PATH, encoding="utf-8") as handle:
-                self.figures = json.load(handle)
+                everything = json.load(handle)
+            for key, info in everything.items():
+                if info.get("kind") == "photo":
+                    self.photos.setdefault(info["page"], []).append({**info, "key": key})
+                else:
+                    self.figures[key] = info
         else:
             log.warning("FIGURES OFF: %s is missing -- answers carry no pictures",
                         FIGURES_PATH)
@@ -198,8 +249,9 @@ def get_index() -> BookIndex:
     global _index
     if _index is None:
         _index = BookIndex()
-        log.info("book ready: %d chunks, %d figures",
-                 len(_index.corpus), len(_index.figures))
+        log.info("book ready: %d chunks, %d figures, %d step photos",
+                 len(_index.corpus), len(_index.figures),
+                 sum(len(v) for v in _index.photos.values()))
     return _index
 
 
@@ -403,13 +455,17 @@ def reject(body: str, hits: list[BookHit], question: str = "") -> str | None:
     return None
 
 
-def pick_figures(question: str, shown: list[BookHit], figures: dict[str, dict],
-                 weight=None) -> list[dict]:
-    """The pictures to put under this answer.
+def pick_figures(question: str, cited: list[BookHit], shown: list[BookHit],
+                 figures: dict[str, dict], weight=None,
+                 photos: dict[int, list[dict]] | None = None) -> list[dict]:
+    """The pictures to put under this answer. None of this is asked of the model.
 
-    Candidates are the figures captioned in the passages the model was shown,
-    those it cited first. A figure is kept when its caption and the question
-    are about the same thing, which is measured, not asked of the model:
+    Captioned figures ("รูปที่ 2.3") come from the passages the answer cites,
+    and from the other passages it was shown in the same chapter. Not from
+    another chapter: asked how to crimp a LAN plug, the answer cited chapter 4
+    and was given the coaxial cable of chapter 3, whose caption also says
+    "เข้าหัว". A figure is kept when its caption and the question are about the
+    same thing:
 
       each shared word counts by its rarity in the book (`weight`), so that
       "สาย", which every cable's caption has, does not put the coaxial cable
@@ -418,6 +474,10 @@ def pick_figures(question: str, shown: list[BookHit], figures: dict[str, dict],
       and a figure behind the best one is dropped: the bus topology's
       caption differs from the star's by one word, and that word is the
       question.
+
+    Step photographs have no caption to compare, only the step printed above
+    them. They are shown for the pages of the passages the answer cites first,
+    in the book's order -- the steps the answer has just listed.
     """
     weight = weight or (lambda word: 1.0)
 
@@ -428,9 +488,16 @@ def pick_figures(question: str, shown: list[BookHit], figures: dict[str, dict],
     def mass(words: set[str]) -> float:
         return sum(weight(w) for w in words)
 
+    def entry(number: str, info: dict) -> dict:
+        return {"number": number, "caption": info["caption"], "page": info["page"],
+                "kind": info.get("kind", "figure"), "url": FIGURES_URL + info["file"],
+                "width": info["width"], "height": info["height"]}
+
     asked = content(question)
+    chapters = {h.rec["chapter"] for h in cited}
+    near = cited + [h for h in shown if h not in cited and h.rec["chapter"] in chapters]
     scored = []
-    for order, hit in enumerate(shown):
+    for order, hit in enumerate(near):
         for number in hit.rec.get("figures", []):
             info = figures.get(number)
             if not info:
@@ -442,19 +509,28 @@ def pick_figures(question: str, shown: list[BookHit], figures: dict[str, dict],
             covered = max(score / mass(words), score / mass(asked))
             if covered >= FIGURE_COVER:
                 scored.append((-score, order, number, info))
-    if not scored:
-        return []
     scored.sort(key=lambda s: s[:3])
-    best = -scored[0][0]
+    best = -scored[0][0] if scored else 0.0
     seen, out = set(), []
     for negative, _, number, info in scored:
         if number in seen or -negative < FIGURE_NEAR_BEST * best:
             continue
         seen.add(number)
-        out.append({"number": number, "caption": info["caption"],
-                    "page": info["page"], "url": FIGURES_URL + info["file"],
-                    "width": info["width"], "height": info["height"]})
-    return out[:MAX_FIGURES]
+        out.append(entry(number, info))
+    out = out[:MAX_FIGURES]
+
+    steps: list[dict] = []
+    for hit in cited[:PHOTO_PASSAGES]:
+        for page in range(hit.rec["page_from"], hit.rec["page_to"] + 1):
+            for info in (photos or {}).get(page, []):
+                if info not in steps:
+                    steps.append(info)
+    if len(steps) > MAX_PHOTOS:
+        # too many to show: keep the steps the question is about, then the first
+        ranked = sorted(range(len(steps)), key=lambda i: (
+            -mass(asked & content(steps[i]["caption"])), i))[:MAX_PHOTOS]
+        steps = [steps[i] for i in sorted(ranked)]
+    return out + [entry(info["key"], info) for info in steps]
 
 
 def nearest(hits: list[BookHit]) -> list[str]:
@@ -469,6 +545,56 @@ def unanswered(hits: list[BookHit], reason: str):
     return Answer(text=f"{UNANSWERED}\n\nหัวข้อที่ใกล้เคียงที่สุดในหนังสือ\n{listing}",
                   citations=nearest(hits), hits=hits, in_scope=False,
                   source="book", error=reason)
+
+
+def split_supplement(raw: str) -> tuple[str, str]:
+    """(what the model says the book says, what it adds of its own)."""
+    mark = SUPPLEMENT_LINE.search(raw)
+    if not mark:
+        return raw, ""
+    return raw[:mark.start()].rstrip(), raw[mark.end():].strip()
+
+
+def clean_supplement(extra: str) -> str:
+    """The model's own addition, made safe to print: no pointer that would
+    read as a reference to the book, no runaway text."""
+    extra = closing_remarks(POINTER.sub("", extra)).strip()
+    if not extra or NO_ANSWER in extra or DEGENERATE_RUN.search(extra):
+        return ""
+    if len(extra) > MAX_SUPPLEMENT:
+        extra = extra[:MAX_SUPPLEMENT].rsplit("\n", 1)[0].rstrip() + " …"
+    return extra
+
+
+async def from_general_knowledge(question: str, hits: list[BookHit], extra: str,
+                                 why: str):
+    """Answer what the book does not, from the model's own knowledge, labelled.
+
+    Reached only for a question that passed the gate -- it is about networking
+    -- and that the book could not answer. The label is fixed text and comes
+    first; there are no references and no figures, because none of this is the
+    book's.
+    """
+    from app.answer import Answer, tidy_for_chat   # answer.py imports this module
+
+    if not extra:
+        try:
+            extra = clean_supplement(await complete(
+                GENERAL_PROMPT, f"คำถามของนักเรียน\n{question}"))
+        except LLMUnavailable as exc:
+            return unanswered(hits, f"llm unavailable: {exc}")
+    if not extra:
+        return unanswered(hits, why)
+    log.info("ANSWERED FROM GENERAL KNOWLEDGE (%s) | %r", why, question[:70])
+    if "nothing to say" in why:
+        text = f"{MODEL_NOTICE}\n\n{tidy_for_chat(extra)}"
+    else:
+        # a guard, not the model, threw the draft out; point at the sections
+        # where the book's own answer would be, if it has one
+        listing = "\n".join(f"• {c}" for c in nearest(hits))
+        text = (f"{UNVERIFIED_NOTICE}\n\n{tidy_for_chat(extra)}\n\n"
+                f"หัวข้อที่ใกล้เคียงที่สุดในหนังสือ\n{listing}")
+    return Answer(text=text, hits=hits, source="model", error=why)
 
 
 async def answer(question: str):
@@ -496,7 +622,8 @@ async def answer(question: str):
                   f"แต่พบเนื้อหาที่เกี่ยวข้องในหนังสือดังนี้\n\n{listing}"),
             citations=nearest(hits), hits=hits, source="book", error=str(exc))
 
-    raw = draft
+    raw, extra = split_supplement(draft)
+    extra = clean_supplement(extra)
     draft, ungrounded = drop_ungrounded(closing_remarks(raw), hits, question)
     reason = reject(draft, hits, question)
     if reason == "no passage cited" and NO_ANSWER not in raw:
@@ -506,16 +633,20 @@ async def answer(question: str):
         # book does not print is not given a second go at printing it.
         log.info("NO POINTERS, ASKING ONCE MORE | %r", question[:70])
         try:
-            raw = await complete(SYSTEM_PROMPT, user + REMINDER)
+            raw, again = split_supplement(await complete(SYSTEM_PROMPT, user + REMINDER))
         except LLMUnavailable as exc:
             return unanswered(hits, f"llm unavailable on retry: {exc}")
+        extra = clean_supplement(again) or extra
         draft, ungrounded = drop_ungrounded(closing_remarks(raw), hits, question)
         reason = reject(draft, hits, question)
     if ungrounded:
         log.info("UNGROUNDED LINES DROPPED %s | %r", ungrounded[:3], question[:70])
     if reason:
         log.info("BOOK ANSWER DROPPED (%s) | %r", reason, question[:80])
-        return unanswered(hits, f"book draft dropped: {reason}")
+        # Nothing the model said could be held to the book. What it knows
+        # besides is offered instead, under a notice saying where it is from.
+        return await from_general_knowledge(
+            question, hits, extra, f"book draft dropped: {reason}")
     draft, reordered = in_book_order(draft, hits)
     if reordered:
         log.info("LIST PUT BACK IN BOOK ORDER | %r", question[:70])
@@ -523,9 +654,12 @@ async def answer(question: str):
     if terms:
         log.info("FOREIGN TERMS (logged only) %s | %r", terms[:5], question[:70])
     body, cited = resolve(draft, hits)
-    return Answer(text=tidy_for_chat(body),
+    body = tidy_for_chat(body)
+    if extra:
+        log.info("SUPPLEMENTED FROM GENERAL KNOWLEDGE | %r", question[:70])
+        body = f"{body}\n\n{SUPPLEMENT_LABEL}\n{tidy_for_chat(extra)}"
+    return Answer(text=body,
                   citations=list(dict.fromkeys(h.citation for h in cited)),
                   hits=hits, source="book",
-                  figures=pick_figures(
-                      question, cited + [h for h in hits if h not in cited],
-                      index.figures, index.rarity))
+                  figures=pick_figures(question, cited, hits, index.figures,
+                                       index.rarity, index.photos))

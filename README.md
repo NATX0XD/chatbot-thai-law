@@ -1,4 +1,18 @@
-# ผู้ช่วยจรรยาบรรณวิชาชีพครู (KMUTNB Teacher Ethics Chatbot)
+# ผู้ช่วยวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น (KMUTNB Network Basics Chatbot)
+
+แชตบอตถาม-ตอบวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น (รหัสวิชา 2204-2003) ตอบจากหนังสือ
+คู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น อ้างบทและหน้าทุกคำตอบ แนบรูปจากหนังสือเมื่อมี
+และเมื่อหนังสือไม่มีคำตอบ จะตอบจากความรู้ทั่วไปของ AI โดยติดป้ายบอกชัดว่าไม่ได้มาจากหนังสือ
+ต่อกับ LINE ได้ และมีหน้าเว็บไว้ทดสอบ
+
+ชุดข้อมูลตั้งที่ตัวแปร `DATASET` — `network` (ค่าเริ่มต้น) คือหนังสือเล่มนี้ ทางตอบอยู่ใน `app/book.py`
+ส่วน `ksp` คือชุดเดิมด้านล่าง ซึ่งเก็บไว้ครบและยังใช้ได้ ดูตารางใน `CLAUDE.md` หัวข้อ 0
+repo นี้เดิมชื่อ `chatbot-thai-law` และ URL บน Render ยังเป็น `thai-law-bot-c5zo.onrender.com`
+เพราะ Render ไม่ให้เปลี่ยนชื่อโดเมนของ service ที่สร้างแล้ว
+
+เนื้อหาตั้งแต่บรรทัดนี้ลงไปเขียนไว้สำหรับชุดเดิม (`DATASET=ksp`)
+
+## ชุดเดิม: ผู้ช่วยจรรยาบรรณวิชาชีพครู
 
 แชตบอตถาม-ตอบเรื่องจรรยาบรรณวิชาชีพทางการศึกษา ตอบจากข้อบังคับคุรุสภาฉบับจริง
 และอ้างเลขข้อทุกคำตอบ ต่อกับ LINE ได้ และมีหน้าเว็บไว้ทดสอบก่อนมี LINE channel
@@ -13,7 +27,7 @@
 ## โครงสร้างโปรเจกต์
 
 ```
-thai-law-bot/
+network-basics-bot/
 ├── data/
 │   ├── raw/ksp/      PDF คุรุสภา 10 ฉบับ ห้ามแก้ (2.1 MB)
 │   ├── ocr/          ผล OCR ของ 4 ฉบับที่ text layer ใช้ไม่ได้ (commit ไว้)
@@ -131,7 +145,7 @@ thai-law-bot/
 ต้องมี Python 3.11 ขึ้นไป (torch ≥ 2.6 ไม่รองรับ 3.9)
 
 ```bash
-cd thai-law-bot
+cd network-basics-bot
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cp .env.example .env          # แล้วใส่คีย์
@@ -205,7 +219,7 @@ LINE คาดหวังให้ webhook ตอบ 200 ภายในไม�
 | `GET /recent?token=...` | ใครถามอะไร บอทตอบอะไร ปิดอยู่ถ้าไม่ตั้ง `MONITOR_TOKEN` |
 | `POST /webhook` | LINE (ตรวจลายเซ็นก่อนเสมอ) |
 
-ยิงจาก Postman ได้ด้วยไฟล์ `postman/thai-law-bot.postman_collection.json` — Import เข้า Postman
+ยิงจาก Postman ได้ด้วยไฟล์ `postman/network-basics-bot.postman_collection.json` — Import เข้า Postman
 แล้วตั้งตัวแปร `baseUrl` กับ `monitorToken` วิธีใช้อยู่ใน `CLAUDE.md` หัวข้อ 5
 
 ---

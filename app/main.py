@@ -20,10 +20,10 @@ from app.retriever import get_retriever
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("law-chatbot")
+log = logging.getLogger("network-basics-bot")
 
 WEB_DIR = os.path.join(BASE_DIR, "web")
-app = FastAPI(title="KMUTNB Thai Law Chatbot", version="0.1.0")
+app = FastAPI(title="KMUTNB Network Basics Chatbot", version="0.2.0")
 
 
 @app.on_event("startup")
@@ -71,6 +71,7 @@ async def health() -> dict:
             "chunks": len(index.corpus),
             "dense_index": True,
             "figures": len(index.figures),
+            "step_photos": sum(len(v) for v in index.photos.values()),
             "llm_configured": bool(settings.typhoon_api_key),
             "line_configured": bool(settings.line_channel_secret
                                     and settings.line_channel_access_token),
