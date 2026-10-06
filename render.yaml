@@ -9,12 +9,12 @@
 # but only one.
 services:
   - type: web
-    # Left as it was on purpose. The service was created from this blueprint,
-    # and Render cannot rename a service's onrender.com address: changing this
-    # name makes the next sync create a second, empty service instead. To get
-    # a new address, create a new service and move the env vars and the LINE
-    # webhook to it.
-    name: thai-law-bot
+    # Must match the service's name in the Render dashboard, which the owner
+    # changed to this on 2026-10-06. A blueprint finds its service by name; a
+    # different name here makes the next sync create a second, empty service.
+    # The address stays https://thai-law-bot-c5zo.onrender.com: Render does not
+    # change a service's onrender.com subdomain when it is renamed.
+    name: network-basics-bot
     runtime: docker
     plan: free
     region: singapore          # closest to Thailand of Render's regions
