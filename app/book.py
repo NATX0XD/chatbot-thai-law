@@ -51,6 +51,12 @@ BOOK = "คู่มือเรียนเครือข่ายคอมพ
 FIGURES_PATH = os.path.join(PROCESSED_DIR, "figures_network.json")
 FIGURES_URL = "/static/figures/"
 TOP_K = 6
+# Passages brought in beside the ones found: see BookIndex.with_the_rest.
+SECTION_LEADS = 3
+SHORT_SECTION = 4
+MAX_PASSAGES = 11
+CHAPTER_SUMMARY = re.compile(r"^สรุปท้ายบทที่")
+SUMMARY_ASKED = re.compile(r"สรุป")
 MAX_FIGURES = 2
 # Step photographs: from how many of the cited passages, and how many at most.
 # LINE shows them in one carousel, which holds twelve.
@@ -164,6 +170,8 @@ SYSTEM_PROMPT = f"""คุณคือผู้ช่วยทบทวนบท
 3. ตัวเลข ชื่อมาตรฐาน ชื่อเมนู และชื่อปุ่ม ให้คัดตามข้อความที่ให้มาทุกตัวอักษร ห้ามเปลี่ยน ห้ามเติมค่าที่ไม่ได้เขียนไว้
 4. ถ้าเป็นขั้นตอนหรือรายการที่หนังสือใส่เลขลำดับไว้ ให้เรียงตามหนังสือและคงเลขลำดับเดิม ห้ามข้าม ห้ามเพิ่ม ห้ามสลับ
 5. ถ้าข้อความที่ให้มาไม่ได้ตอบคำถาม ให้ตอบเพียงว่า {NO_ANSWER} ห้ามตอบจากความรู้เดิม
+   ถ้าคำถามสั่งให้วาดแผนภาพหรือวาดรูป ไม่ต้องวาดและไม่ต้องบอกว่าวาดไม่ได้ ให้อธิบายลักษณะตามข้อความที่ให้มา
+   แล้วตอบส่วนที่เหลือของคำถามตามปกติ ระบบจะแนบรูปจากหนังสือให้เอง
 6. เขียนภาษาไทยที่นักเรียนอ่านเข้าใจง่าย เริ่มด้วยคำตอบตรง ๆ 1-2 ประโยค แล้วขยายเท่าที่จำเป็น ไม่เกิน 12 บรรทัด
 7. ห้ามใช้ ** ## หรือตาราง เพราะแสดงผลไม่ได้ ใช้ • นำหน้ารายการได้
 8. ลงท้ายประโยคสุดท้ายของคำตอบด้วยคำว่า ครับ ถ้าต้องเรียกตัวเองให้ใช้คำว่า ผม
@@ -248,6 +256,7 @@ class BookIndex(ArticleIndex):
                     f"book index/corpus mismatch: {size} {name} vs "
                     f"{len(self.corpus)} chunks. Re-run ingest.build_book_index.")
         self.embedder = None
+        self._sections: Optional[dict] = None
         # Absent is a state: the book answers without its pictures. Logged once.
         self.figures: dict[str, dict] = {}
         # uncaptioned step photographs, by the page they are printed on
@@ -277,7 +286,56 @@ class BookIndex(ArticleIndex):
 
     def find(self, question: str, top_k: int = TOP_K) -> tuple[list[BookHit], float]:
         asked = question.translate(THAI_DIGITS)
-        return self.search(asked, self.encode(asked), top_k)
+        hits, best = self.search(asked, self.encode(asked), top_k)
+        return self.with_the_rest(hits, wants_summary=bool(SUMMARY_ASKED.search(asked))), best
+
+    def section(self, rec: dict) -> list[dict]:
+        """The chunks of the section this one was cut from, in book order."""
+        if self._sections is None:
+            self._sections = {}
+            for other in self.corpus:
+                self._sections.setdefault((other["chapter"], other["heading"]), []).append(other)
+        return self._sections[(rec["chapter"], rec["heading"])]
+
+    def with_the_rest(self, hits: list[BookHit], wants_summary: bool = False
+                      ) -> list[BookHit]:
+        """The passages found, with what a chunk boundary cut them off from.
+
+        A list of three mechanisms or seven steps is cut wherever the chunk
+        fills up. The search then finds the piece that names the list, and the
+        model, shown one mechanism of three, wrote that there were two. So each
+        of the best passages brings the pieces next to it: the whole section
+        when it is short, the piece before and the piece after when it is long.
+
+        The end-of-chapter summary goes last. It repeats the chapter in one
+        line per topic, matches every question about the chapter, and was being
+        cited for definitions and details that are only in the body.
+        """
+        if not wants_summary:
+            hits = ([h for h in hits if not CHAPTER_SUMMARY.match(h.rec["heading"])]
+                    + [h for h in hits if CHAPTER_SUMMARY.match(h.rec["heading"])])
+        found = {h.rec["id"]: h for h in hits}
+        out: list[BookHit] = []
+        placed: set[str] = set()
+        room = MAX_PASSAGES - len(hits)
+        for lead, hit in enumerate(hits):
+            pieces = [hit.rec]
+            if lead < SECTION_LEADS and not CHAPTER_SUMMARY.match(hit.rec["heading"]):
+                whole = self.section(hit.rec)
+                at = next(i for i, r in enumerate(whole) if r["id"] == hit.rec["id"])
+                near = whole if len(whole) <= SHORT_SECTION else whole[max(at - 1, 0):at + 2]
+                pieces = []
+                for rec in near:
+                    if rec["id"] in found or rec["id"] in placed or rec["id"] == hit.rec["id"]:
+                        pieces.append(rec)
+                    elif room > 0:
+                        pieces.append(rec)
+                        room -= 1
+            for rec in pieces:
+                if rec["id"] not in placed:
+                    placed.add(rec["id"])
+                    out.append(found.get(rec["id"]) or BookHit(rec=rec, rrf=0.0))
+        return out
 
 
 _index: Optional[BookIndex] = None
@@ -613,10 +671,19 @@ def split_supplement(raw: str) -> tuple[str, str]:
     return raw[:mark.start()].rstrip(), raw[mark.end():].strip()
 
 
+ABOUT_PASSAGES = re.compile(
+    r"ข้อความที่ให้มา|แหล่งที่ให้มา|ข้อความจากหนังสือ|ข้อความที่ค้น|มาจากหนังสือ")
+
+
 def clean_supplement(extra: str) -> str:
     """The model's own addition, made safe to print: no pointer that would
     read as a reference to the book, no runaway text."""
-    extra = closing_remarks(POINTER.sub("", extra)).strip()
+    extra = closing_remarks(POINTER.sub("", extra))
+    # A line about what the passages do or do not say is not general knowledge,
+    # and twice it was wrong about them. 4 of 30 supplement lines in the saved
+    # answers of 2026-10-06 matched, all four of this kind.
+    extra = "\n".join(line for line in extra.split("\n")
+                      if not ABOUT_PASSAGES.search(line)).strip()
     if not extra or NO_ANSWER in extra or DEGENERATE_RUN.search(extra):
         return ""
     if len(extra) > MAX_SUPPLEMENT:

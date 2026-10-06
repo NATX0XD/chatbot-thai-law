@@ -217,3 +217,32 @@ def test_a_block_with_no_step_above_it_is_not_kept():
     captioned = [("1. ขั้นแรก", 0.1, 0.10, 0.3, 0.02),
                  ("รูปที่ 4.1 อุปกรณ์พื้นฐาน", 0.1, 0.30, 0.5, 0.02)]
     assert fig.step_above(captioned, 0.40) == ""
+
+
+def test_a_heading_run_onto_the_paragraph_above_gets_its_own_line():
+    """The source prints "...และรวดเร็วความน่าเชื่อถือ": the reliability list was
+    filed under performance and given as the answer about performance."""
+    contents = {ex.key("ความน่าเชื่อถือ"), ex.key("ความปลอดภัย")}
+    body = [(67, "ทำงานได้อย่างมีประสิทธิภาพและรวดเร็วความน่าเชื่อถือ"),
+            (67, "ความน่าเชื่อถือของระบบเครือข่าย สามารถประเมินได้จากสิ่งต่อไปนี้")]
+    assert [line for _, line in ex.unglued(body, contents)][:2] == [
+        "ทำงานได้อย่างมีประสิทธิภาพและรวดเร็ว", "ความน่าเชื่อถือ"]
+    assert [h for h, _ in ex.sections(body, contents)] == ["", "ความน่าเชื่อถือ"]
+
+
+def test_a_sentence_that_ends_in_the_words_of_a_heading_is_left_whole():
+    contents = {ex.key("ความน่าเชื่อถือ"), ex.key("ความปลอดภัยของเครือข่าย")}
+    line = "ไม่ได้มุ่งเน้นที่ระบบ ความปลอดภัยของเครือข่าย"
+    assert list(ex.unglued([(91, line)], contents)) == [(91, line)]
+
+
+def test_the_reliability_list_is_filed_under_reliability():
+    import json
+    import os
+    if not os.path.exists(ex.OUT_PATH):
+        import pytest
+        pytest.skip("corpus not built")
+    with open(ex.OUT_PATH, encoding="utf-8") as handle:
+        built = [json.loads(line) for line in handle]
+    chunk = next(r for r in built if "1. ความถี่ของความล้มเหลว" in r["text"])
+    assert chunk["heading"] == "ความน่าเชื่อถือ"

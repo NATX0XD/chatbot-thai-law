@@ -568,3 +568,39 @@ def test_every_figure_a_passage_names_has_a_caption_on_record():
     assert all(i["kind"] == "photo" for group in index.photos.values() for i in group)
     unknown = {n for n in index.figures if n not in named}
     assert not unknown, f"figures cut from the PDF that no passage captions: {unknown}"
+
+
+@needs_index
+def test_a_list_cut_across_chunks_comes_back_whole():
+    """CSMA/CD has three mechanisms in three chunks. Shown one of them, the
+    model wrote that there were two."""
+    hits, _ = book.get_index().find("โปรโตคอล CSMA/CD มีกลไกการทำงานอย่างไร")
+    text = " ".join(h.rec["text"] for h in hits)
+    assert all(f"กลไกที่ {n}" in text for n in (1, 2, 3))
+    assert len(hits) <= book.MAX_PASSAGES
+
+
+@needs_index
+def test_the_chapter_summary_comes_after_the_body_it_summarises():
+    hits, _ = book.get_index().find("เกณฑ์วัดประสิทธิภาพเครือข่ายด้านสมรรถนะ ประกอบด้วยส่วนใดบ้าง")
+    summary = [bool(book.CHAPTER_SUMMARY.match(h.rec["heading"])) for h in hits]
+    assert summary == sorted(summary)
+    assert not summary[0]
+
+
+@needs_index
+def test_a_request_for_the_summary_keeps_the_summary_where_it_ranked():
+    index = book.get_index()
+    summary = next(r for r in index.corpus if book.CHAPTER_SUMMARY.match(r["heading"]))
+    body = next(r for r in index.corpus if r["chapter"] == summary["chapter"]
+                and not book.CHAPTER_SUMMARY.match(r["heading"]))
+    ranked = [book.BookHit(rec=summary, rrf=1.0), book.BookHit(rec=body, rrf=0.5)]
+    assert index.with_the_rest(ranked, wants_summary=True)[0].rec["id"] == summary["id"]
+    assert index.with_the_rest(ranked)[-1].rec["id"] == summary["id"]
+
+
+def test_a_supplement_line_about_the_passages_is_not_general_knowledge():
+    extra = ("ข้อความที่ให้มาไม่ได้ระบุรายละเอียดกลไกที่ 2 อย่างชัดเจน\n"
+             "สายไขว้ใช้ต่อคอมพิวเตอร์สองเครื่องเข้าหากันโดยตรง")
+    assert book.clean_supplement(extra) == "สายไขว้ใช้ต่อคอมพิวเตอร์สองเครื่องเข้าหากันโดยตรง"
+    assert book.clean_supplement("ข้อมูลนี้มาจากหนังสือ ซึ่งระบุชัดเจน") == ""

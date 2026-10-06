@@ -179,10 +179,47 @@ def chapters(lines: list[str]):
         yield current
 
 
+GLUED_HEADING = 10
+
+
+def unglued(body: list[tuple[int, str]], contents: set[str]):
+    """The lines of a chapter, with a heading that the source ran onto the end
+    of the paragraph above it put back on a line of its own.
+
+    "...อย่างมีประสิทธิภาพและรวดเร็วความน่าเชื่อถือ" is the last sentence on
+    performance followed by the heading of the section on reliability. Left
+    alone, the reliability list was filed under "สมรรถนะ" and given as the
+    answer to a question about performance. Taken only when nothing separates
+    the two: with a space between, the same words are the end of a sentence
+    ("ไม่ได้มุ่งเน้นที่ระบบความปลอดภัย").
+    """
+    by_length = sorted((e for e in contents if len(e) >= GLUED_HEADING), key=len,
+                       reverse=True)
+    for page, line in body:
+        if is_heading(line, contents) or CAPTION.match(line) or BULLET.match(line):
+            yield page, line
+            continue
+        squeezed = key(line)
+        entry = next((e for e in by_length
+                      if squeezed.endswith(e) and len(squeezed) > len(e)), None)
+        cut = None
+        if entry:
+            # walk back over the entry's letters to where it starts in the line
+            left, cut = len(entry), len(line)
+            while left and cut:
+                cut -= 1
+                left -= len(key(line[cut]))
+        if cut and not line[cut - 1].isspace() and is_heading(line[cut:], contents):
+            yield page, line[:cut]
+            yield page, line[cut:]
+        else:
+            yield page, line
+
+
 def sections(body: list[tuple[int, str]], contents: set[str]):
     """Yield (heading, [(page, line), ...]) for each section of one chapter."""
     heading, held = "", []
-    for page, line in body:
+    for page, line in unglued(body, contents):
         if is_heading(line, contents):
             if held:
                 yield heading, held

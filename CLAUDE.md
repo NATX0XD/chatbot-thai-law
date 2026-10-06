@@ -94,6 +94,7 @@ repo นี้เป็น public
 | `data/processed/corpus_network.jsonl` / `corpus_network_SOURCES.md` | `python -m ingest.extract_book` |
 | `data/index/network_*` | `python -m ingest.build_book_index` |
 | `web/figures/*` / `data/processed/figures_network.json` | `python -m ingest.extract_figures` (ต้องใช้ macOS) |
+| `data/eval/แบบทดสอบแชทบอทเครือข่าย.xlsx` | `python -m ingest.export_book_test` (ลง Google Sheet: `ingest.push_book_test`) ช่องคะแนนเว้นว่างให้คนกรอก |
 | `assets/network/*.png` / `web/logo-network.png` | เรนเดอร์จาก `assets/network/logo.html` และ `richmenu.html` |
 
 แก้ที่สคริปต์ แล้วสร้างใหม่ เสมอ
@@ -109,7 +110,7 @@ repo นี้เป็น public
 .venv/bin/python -m pytest -q
 ```
 
-ต้องผ่านครบ ตอนนี้ 544 ตัว เทสต์ตกแม้ตัวเดียวคือยังไม่ commit
+ต้องผ่านครบ ตอนนี้ 551 ตัว เทสต์ตกแม้ตัวเดียวคือยังไม่ commit
 
 push ขึ้น `main` แล้ว Render จะ deploy เองอัตโนมัติ (`autoDeployTrigger: commit`)
 แปลว่า **push ผิด = เซิร์ฟเวอร์จริงพังทันที** ไม่มีขั้นกลาง
