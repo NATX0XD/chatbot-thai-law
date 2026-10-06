@@ -708,6 +708,12 @@ async function submit() {
   if (!q || send.disabled) return;
   const retrievalOnly = $('tSearch').classList.contains('on');
 
+  // the question before this one, so a follow-up has something to go on from
+  const earlier = current ? current.messages.filter(m => m.role === 'user') : [];
+  const previous = earlier.length ? earlier[earlier.length - 1].text : null;
+  const said = current ? current.messages.filter(m => m.role === 'bot') : [];
+  const previous_answer = said.length ? said[said.length - 1].text.slice(0, 6000) : null;
+
   bubble(q, 'me');
   remember('user', q);
   input.value = '';
@@ -729,7 +735,7 @@ async function submit() {
       const res = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, previous, previous_answer }),
       });
       const d = await res.json();
       pending.textContent = d.answer;

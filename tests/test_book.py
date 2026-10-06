@@ -88,6 +88,19 @@ def test_a_draft_with_a_made_up_number_is_rejected():
     assert reason and "185" in reason
 
 
+def test_one_line_with_a_made_up_number_does_not_cost_the_whole_answer():
+    draft = "สายคู่บิดเกลียวมีราคาถูก [1]\nรองรับความเร็ว 1000 เมกะบิต [1]\nเชื่อมได้ไกล 100 เมตร [1]"
+    kept, removed = book.drop_unsupported_numbers(draft, [CABLE])
+    assert kept == "สายคู่บิดเกลียวมีราคาถูก [1]\nเชื่อมได้ไกล 100 เมตร [1]"
+    assert removed == ["1000"]
+
+
+def test_a_number_from_the_answer_already_given_may_be_repeated():
+    draft = "ตามที่บอกไปว่ายาวได้ 185 เมตร [1]"
+    assert book.drop_unsupported_numbers(draft, [CABLE], "คำตอบก่อนหน้า ยาวได้ 185 เมตร")[1] == []
+    assert book.drop_unsupported_numbers(draft, [CABLE])[1] == ["185"]
+
+
 def test_a_draft_that_cites_nothing_is_rejected():
     assert book.reject("สายคู่บิดเกลียวเป็นสายสัญญาณที่มีราคาถูก", [CABLE]) == "no passage cited"
 
@@ -315,11 +328,85 @@ def test_a_question_from_the_book_is_answered_with_its_page_and_picture(model):
 
 
 @needs_index
-def test_a_question_about_something_else_never_reaches_the_model(model):
+def test_a_question_about_something_else_is_never_given_the_passages(model):
+    # The gate decides it is not a question for the book. The model is then
+    # asked only to word the reply to this one message; it sees no passage and
+    # the answer stays a refusal whatever it writes.
+    model["reply"] = "เรื่องอาหารผมช่วยไม่ได้ครับ ลองถามเรื่องเครือข่ายคอมพิวเตอร์ได้เลยครับ"
     a = run(answer_question("สูตรทำต้มยำกุ้งใส่อะไรบ้าง"))
     assert not a.in_scope and a.source == "book"
-    assert model["calls"] == []
-    assert "กฎหมาย" not in a.text and "จรรยาบรรณ" not in a.text
+    assert [c["system"] for c in model["calls"]] == [book.CHAT_PROMPT]
+    assert "ข้อความจากหนังสือ" not in model["calls"][0]["user"]
+    assert a.text == model["reply"] and a.citations == [] and a.figures == []
+
+
+@needs_index
+def test_a_runaway_or_empty_chat_reply_falls_back_to_the_fixed_text(model):
+    model["reply"] = "ต้มยำกุ้งใส่ " * 80
+    assert run(answer_question("สูตรทำต้มยำกุ้งใส่อะไรบ้าง")).text == book.OUT_OF_SCOPE
+    model["reply"] = ""
+    assert run(answer_question("สูตรทำต้มยำกุ้งใส่อะไรบ้าง")).text == book.OUT_OF_SCOPE
+
+
+@needs_index
+@pytest.mark.parametrize("question", [
+    "จากหนังสือมีทั้งหมดกี่บทครับ", "จากหนังสือมีทั้งหมด กี่บทครับ",
+    "หนังสือเล่มนี้มีเนื้อหาเรื่องอะไรบ้าง", "ขอสารบัญหน่อย"])
+def test_a_question_about_the_book_itself_is_answered_by_counting(model, question):
+    a = run(answer_question(question))
+    assert a.in_scope and model["calls"] == []
+    assert "มีทั้งหมด 7 บท" in a.text
+    assert "บทที่ 1 เครือข่ายการสื่อสาร (หน้า 12-30)" in a.text
+    assert "บทที่ 7 " in a.text
+
+
+@pytest.mark.parametrize("question", ["คุณเป็นใคร", "คุณรู้เรื่องอะไรบ้าง", "ถามอะไรได้บ้าง",
+                                      "ไม่รู้จะถามอะไร"])
+def test_asking_the_bot_about_itself_gets_the_introduction(question):
+    assert route(question) == NETWORK_CAPABILITIES
+
+
+@pytest.mark.parametrize("question", ["เซิร์ฟเวอร์เป็นอะไรกับเครื่องลูกข่าย",
+                                      "ฮับคืออะไร", "โปรโตคอลคืออะไรบ้าง"])
+def test_a_networking_question_is_not_taken_for_one_about_the_bot(question):
+    assert route(question) is None
+    assert not book.ABOUT_BOOK.search(question)
+
+
+@pytest.mark.parametrize("message", ["อยากรู้เพิ่มเติมอีก", "แล้วข้อเสียล่ะ", "ยกตัวอย่างหน่อย",
+                                     "ไม่เข้าใจ", "ทำไมล่ะ", "ขอรูปหน่อย"])
+def test_a_follow_up_is_read_with_the_question_before_it(message):
+    assert book.with_context(message, "สาย Lan คืออะไร") == f"{message} — สาย Lan คืออะไร"
+    assert book.with_context(message, None) == message
+
+
+@pytest.mark.parametrize("message", ["แบบจำลอง OSI มีกี่ชั้น", "โทโปโลยีแบบดาวคืออะไร",
+                                     "ฮับกับสวิตช์ต่างกันอย่างไร"])
+def test_a_new_question_is_not_tied_to_the_one_before(message):
+    assert book.with_context(message, "สาย Lan คืออะไร") == message
+
+
+@needs_index
+def test_a_follow_up_goes_on_instead_of_being_refused(model):
+    model["reply"] = "สายแลนเป็นสายคู่บิดเกลียวที่ใช้เชื่อมต่อเครือข่าย [1]"
+    a = run(answer_question("อยากรู้เพิ่มเติมอีก", "สาย Lan คืออะไร",
+                            "สาย LAN คือสายคู่บิดเกลียว (บทที่ 4 หน้า 124-125)"))
+    assert a.in_scope and a.citations
+    sent = model["calls"][0]["user"]
+    assert sent.startswith("คำถามก่อนหน้าของนักเรียน\nสาย Lan คืออะไร\n\n"
+                           "คำถามตอนนี้ ซึ่งถามต่อจากคำถามก่อนหน้า\nอยากรู้เพิ่มเติมอีก")
+    assert "คำตอบที่ให้ไปแล้ว\nสาย LAN คือสายคู่บิดเกลียว" in sent
+
+
+def test_line_keeps_the_last_question_of_a_chat_for_a_while(monkeypatch):
+    from app import line_bot
+    monkeypatch.setattr(line_bot, "_last_question", {})
+    assert line_bot.previous_question("U1") == (None, None)
+    line_bot.remember_question("U1", "สาย Lan คืออะไร", "คำตอบ")
+    assert line_bot.previous_question("U1") == ("สาย Lan คืออะไร", "คำตอบ")
+    assert line_bot.previous_question("U2") == (None, None)
+    monkeypatch.setattr(line_bot.time, "time", lambda: 10 ** 12)
+    assert line_bot.previous_question("U1") == (None, None)
 
 
 @needs_index

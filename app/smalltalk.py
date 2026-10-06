@@ -136,6 +136,12 @@ NETWORK_ROUTES: tuple[tuple[re.Pattern, str], ...] = (
     (ROUTES[2][0], THANKS),
     (ROUTES[3][0], NETWORK_GREETING),
     (ROUTES[4][0], NETWORK_CAPABILITIES),
+    # Asked on the first morning and refused as off the subject: "คุณเป็นใคร",
+    # "คุณรู้เรื่องอะไรบ้าง". Only for this bot -- in a question about the law
+    # "เป็นใคร" is part of the question.
+    (re.compile(r"^(?:คุณ|เธอ|นาย|บอท|น้อง|พี่|นี่)?\s*(?:เป็น|คือ)\s*(?:ใคร|อะไร|บอทอะไร)"
+                r"|(?:คุณ|บอท)?\s*(?:รู้|ตอบ|สอน|ช่วย|ถาม)(?:ได้)?(?:เรื่อง)?อะไร(?:ได้)?บ้าง"
+                r"|รู้เรื่องอะไร|ถามอะไรดี|ไม่รู้จะถามอะไร"), NETWORK_CAPABILITIES),
 )
 
 

@@ -145,6 +145,10 @@ async def stats() -> dict:
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
+    # the asker's last question in this chat, so "อยากรู้เพิ่มเติมอีก" has
+    # something to go on from; the server keeps no session for the web page
+    previous: str | None = Field(default=None, max_length=1000)
+    previous_answer: str | None = Field(default=None, max_length=6000)
 
 
 @app.post("/chat")
@@ -152,7 +156,7 @@ async def chat(req: ChatRequest) -> dict:
     # The web page and LINE share one buffer, so /recent shows the whole of what
     # the bot is being asked, not just the half that arrived over LINE.
     entry = monitor.record(source="web", user="", text=req.question)
-    answer = await answer_question(req.question)
+    answer = await answer_question(req.question, req.previous, req.previous_answer)
     monitor.finish(entry, answer=answer.text, in_scope=answer.in_scope,
                    faults=answer.faults, repair=answer.repair, error=answer.error)
     return {

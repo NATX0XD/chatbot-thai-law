@@ -681,16 +681,23 @@ def inspect(text: str, hits: list[Hit]) -> list[Fault]:
     return faults
 
 
-async def answer_question(question: str) -> Answer:
-    """Answer from whichever dataset this deployment serves."""
+async def answer_question(question: str, previous: str | None = None,
+                          previous_answer: str | None = None) -> Answer:
+    """Answer from whichever dataset this deployment serves.
+
+    `previous` is the asker's last question and `previous_answer` what it was
+    given, if the caller kept them. Only the book path reads them, to make
+    sense of "อยากรู้เพิ่มเติมอีก" and to go on rather than say it all again.
+    """
     if settings.dataset == "network":
-        return await answer_from_book(question)
+        return await answer_from_book(question, previous, previous_answer)
     if settings.dataset == "ksp":
         return await answer_from_rules(question)
     raise RuntimeError(f"DATASET={settings.dataset!r} -- ต้องเป็น network หรือ ksp")
 
 
-async def answer_from_book(question: str) -> Answer:
+async def answer_from_book(question: str, previous: str | None = None,
+                           previous_answer: str | None = None) -> Answer:
     question = (question or "").strip()
     if not question:
         return Answer(text=book.EMPTY, in_scope=False, source="book")
@@ -698,7 +705,7 @@ async def answer_from_book(question: str) -> Answer:
     if canned:
         log.info("SMALLTALK | %r", question[:60])
         return Answer(text=canned, in_scope=False, source="book")
-    return await book.answer(question)
+    return await book.answer(question, previous, previous_answer)
 
 
 async def answer_from_rules(question: str) -> Answer:

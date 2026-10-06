@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import logging
 import re
+import time
 
 import httpx
 
@@ -73,6 +74,31 @@ def strip_mention(message: dict, text: str) -> tuple[str, bool]:
     for start, length in sorted(spans, reverse=True):
         text = text[:start] + text[start + length:]
     return text.strip(), mentioned
+
+
+# The last question each conversation was given an answer to, so that a
+# follow-up ("แล้วข้อเสียล่ะ") can be read with it. In memory, by chat id,
+# forgotten after a quarter of an hour or when the process restarts; nothing
+# is written anywhere.
+CONTEXT_SECONDS = 15 * 60
+CONTEXT_CHATS = 500
+_last_question: dict[str, tuple[float, str, str]] = {}
+
+
+def previous_question(chat: str | None) -> tuple[str | None, str | None]:
+    """(the last answered question in this chat, the answer it got)."""
+    kept = _last_question.get(chat or "")
+    if kept and time.time() - kept[0] <= CONTEXT_SECONDS:
+        return kept[1], kept[2]
+    return None, None
+
+
+def remember_question(chat: str | None, question: str, answer: str) -> None:
+    if not chat:
+        return
+    if len(_last_question) >= CONTEXT_CHATS:
+        _last_question.pop(min(_last_question, key=lambda k: _last_question[k][0]))
+    _last_question[chat] = (time.time(), question, answer)
 
 
 REPLY_URL = "https://api.line.me/v2/bot/message/reply"
@@ -179,7 +205,9 @@ async def handle_event(event: dict) -> None:
         await show_loading(target)
 
     try:
-        answer = await answer_question(text)
+        answer = await answer_question(text, *previous_question(target))
+        if answer.in_scope:
+            remember_question(target, text, answer.text)
         body = answer.for_line_messages()
         monitor.finish(entry, answer=answer.text, in_scope=answer.in_scope,
                        faults=answer.faults, repair=answer.repair,

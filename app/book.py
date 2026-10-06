@@ -77,6 +77,44 @@ OUT_OF_SCOPE = (
     "การเข้าหัวสายแลน และการตั้งค่าเวิร์กกรุ๊ปบน Windows\n\n"
     "ลองถามใหม่ให้ตรงกับเรื่องเหล่านี้ได้เลยครับ")
 
+# --- the things people say that are not a question the book answers ---
+#
+# Read from the first hour of real traffic: "จากหนังสือมีทั้งหมดกี่บทครับ",
+# "คุณเป็นใคร", "อยากรู้เพิ่มเติมอีก". Each got the fixed refusal above, word
+# for word, and none of them is off the subject -- the first is about the book
+# itself, the second about the bot, the third goes on from the last answer.
+
+# A question about the book rather than about networks. Answered from the
+# corpus by counting, not by the model: see about_the_book.
+ABOUT_BOOK = re.compile(
+    r"กี่บท|สารบัญ|มีบทอะไร|บทไหนบ้าง|แต่ละบท|"
+    r"(?:หนังสือ|เล่มนี้|วิชานี้|เนื้อหา).{0,20}(?:มีอะไรบ้าง|เรื่องอะไร|เกี่ยวกับอะไร|สอนอะไร|"
+    r"ชื่ออะไร|เล่มไหน|อะไรบ้าง)|(?:ใช้|ตอบจาก|อ้างอิง).{0,10}หนังสือ(?:อะไร|เล่มไหน)")
+
+# A message that only makes sense after the one before it.
+FOLLOW_UP = re.compile(
+    r"เพิ่มเติม|เพิ่มอีก|อีกหน่อย|อีกนิด|ต่ออีก|ต่อเลย|เล่าต่อ|ขยายความ|ละเอียดกว่านี้|"
+    r"ละเอียดขึ้น|ยกตัวอย่าง|ขอตัวอย่าง|สรุปสั้น|สั้น ?ๆ|ง่าย ?ๆ|ไม่เข้าใจ|งง|"
+    r"หมายความว่า(?:ไง|ยังไง|อย่างไร)|แล้ว.{0,25}(?:ล่ะ|ละ|หล่ะ)|^(?:ทำไม|ยังไง|อย่างไร|เช่น)"
+    r"(?:ล่ะ|ครับ|คะ|ค่ะ|\s)*$|^(?:แล้ว|และ|ส่วน|อันนี้|อันนั้น|มัน|ข้อ)|มีรูปไหม|ขอรูป")
+MAX_FOLLOW_UP = 60
+
+CHAT_FALLBACK = OUT_OF_SCOPE
+MAX_CHAT = 500
+CHAT_PROMPT = f"""คุณคือผู้ช่วยทบทวนวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น สำหรับนักเรียนระดับ ปวช. คุยผ่านแอปแชท LINE
+คุณตอบคำถามจากหนังสือ{BOOK} (รหัสวิชา 2204-2003) ซึ่งมีเรื่องประเภทของเครือข่าย แบบจำลอง OSI
+สายสัญญาณและสื่อกลางไร้สาย อุปกรณ์เครือข่าย โทโปโลยี อีเทอร์เน็ต การเข้าหัวสายแลน
+และการตั้งค่าเวิร์กกรุ๊ป บัญชีผู้ใช้ สิทธิ์ การแชร์ไฟล์และเครื่องพิมพ์บน Windows
+
+ข้อความต่อไปนี้ของนักเรียนไม่ใช่คำถามที่หาคำตอบในหนังสือได้ ให้ตอบกลับสั้น ๆ 1-3 ประโยค เป็นธรรมชาติเหมือนคนคุยกัน
+
+- ถ้าเป็นการทักทาย ถามว่าคุณคือใคร หรือชวนคุย ให้ตอบรับสั้น ๆ แล้วชวนถามเรื่องในวิชา
+- ถ้าข้อความกำกวม ไม่รู้ว่าถามเรื่องอะไร ให้ถามกลับว่าอยากรู้เรื่องไหน พร้อมยกหัวข้อในวิชา 2-3 หัวข้อ
+- ถ้าเป็นเรื่องอื่นที่ไม่ใช่เครือข่ายคอมพิวเตอร์ ให้บอกสุภาพ ๆ ว่าช่วยได้เฉพาะวิชานี้ แล้วชวนถามเรื่องในวิชา
+  ห้ามตอบเนื้อหาของเรื่องนั้นแม้แต่บางส่วน ห้ามให้ข้อมูล ตัวเลข สูตร หรือคำแนะนำในเรื่องนั้น
+- ห้ามอธิบายเนื้อหาวิชาเครือข่ายในข้อความนี้ ถ้านักเรียนอยากรู้ ให้ชวนถามเป็นคำถามมา
+- ห้ามใช้ ** ## เขียนเป็นข้อความธรรมดา ลงท้ายด้วย ครับ ห้ามขึ้นต้นด้วยคำว่า ขออภัย"""
+
 UNANSWERED = (
     "เรื่องนี้ผมหาคำตอบที่ยืนยันกับหนังสือไม่ได้ จึงไม่ตอบ เพราะไม่อยากเดาครับ "
     "อาจเป็นเรื่องที่หนังสือเล่มนี้ไม่ได้อธิบายไว้ หรือลองถามให้เจาะจงขึ้นได้ครับ")
@@ -149,7 +187,7 @@ STEP_MARK = re.compile(r"ขั้นตอนที่\s*\d{1,2}")
 CONNECTIVES = frozenset((
     "ได้แก่", "ดังนี้", "ดังต่อไปนี้", "ต่อไปนี้", "ครับ", "สรุป", "ประกอบด้วย",
     "กล่าวคือ", "นั่นคือ", "ดังนั้น", "ส่วน", "สำหรับ", "รายละเอียด", "เช่น",
-    "อย่างไรก็ตาม", "นอกจากนี้", "โดยสรุป", "ทั้งหมด", "คำตอบ", "หนังสือ", "ระบุ", "อธิบาย"))
+    "อย่างไรก็ตาม", "นอกจากนี้", "โดยสรุป", "ทั้งหมด", "เท่านี้", "เพียง", "คำตอบ", "หนังสือ", "ระบุ", "อธิบาย"))
 # "ในทางกลับกัน เครือข่ายแบบโดเมน" above four bullets is what says whose
 # bullets they are. A short uncited line directly above a list is kept on a
 # narrower test than the rest: it may not bring a number or an English term
@@ -428,6 +466,26 @@ def unsupported_numbers(body: str, hits: list[BookHit], question: str = "") -> l
     return bad
 
 
+def drop_unsupported_numbers(draft: str, hits: list[BookHit], context: str = ""
+                             ) -> tuple[str, list[str]]:
+    """Take out each line that states a number the passages do not print.
+
+    The line, not the whole answer: a draft of eight sound lines used to be
+    thrown away for one "1000" in the ninth, and the question then went to the
+    model's own knowledge although the book had answered it. `context` is
+    what else the number may rightly come from -- the question, and on a
+    follow-up the answer already given, whose numbers were checked then.
+    """
+    kept, removed = [], []
+    for line in draft.split("\n"):
+        bad = unsupported_numbers(line, hits, context)
+        if bad:
+            removed.append(bad[0])
+        else:
+            kept.append(line)
+    return "\n".join(kept), removed
+
+
 def foreign_terms(body: str, hits: list[BookHit], question: str = "") -> list[str]:
     """English terms in the answer that neither the passages nor the question use.
 
@@ -597,21 +655,86 @@ async def from_general_knowledge(question: str, hits: list[BookHit], extra: str,
     return Answer(text=text, hits=hits, source="model", error=why)
 
 
-async def answer(question: str):
+def about_the_book(index: BookIndex) -> str:
+    """What the book is and what its chapters are, counted from the corpus."""
+    chapters: dict[int, dict] = {}
+    for rec in index.corpus:
+        row = chapters.setdefault(rec["chapter"], {
+            "title": rec["chapter_title"], "first": rec["page_from"], "last": rec["page_to"]})
+        row["last"] = max(row["last"], rec["page_to"])
+    listing = "\n".join(f"บทที่ {n} {row['title']} (หน้า {row['first']}-{row['last']})"
+                        for n, row in sorted(chapters.items()))
+    return (f"ผมตอบจากหนังสือ{BOOK} รหัสวิชา 2204-2003 ของฝ่ายตำราวิชาการคอมพิวเตอร์ "
+            f"ซีเอ็ดยูเคชั่น มีทั้งหมด {len(chapters)} บทครับ\n\n{listing}\n\n"
+            "อยากทบทวนบทไหนหรือเรื่องไหน ถามมาได้เลยครับ")
+
+
+def with_context(question: str, previous: str | None) -> str:
+    """What to search for: the message itself, or -- when it only makes sense
+    after the one before it ("อยากรู้เพิ่มเติมอีก", "แล้วข้อเสียล่ะ") -- the
+    message with the earlier question behind it. The new words go first: they
+    are what is being asked now, and the earlier question only says about what.
+    """
+    if previous and len(question) <= MAX_FOLLOW_UP and FOLLOW_UP.search(question):
+        return f"{question} — {previous.strip()}"
+    return question
+
+
+async def chat_reply(question: str) -> str:
+    """A short reply, written for this message, to something that is not a
+    question for the book. The decision not to answer was made by the gate
+    before this is called; the model only words it. Falls back on any doubt."""
+    try:
+        text = (await complete(CHAT_PROMPT, f"ข้อความของนักเรียน\n{question}")).strip()
+    except LLMUnavailable as exc:
+        log.info("chat reply fell back to fixed text: %s", exc)
+        return CHAT_FALLBACK
+    text = POINTER.sub("", text).replace("**", "").strip()
+    if not text or len(text) > MAX_CHAT or DEGENERATE_RUN.search(text):
+        log.info("chat reply rejected, using fixed text | %r", text[:80])
+        return CHAT_FALLBACK
+    return text
+
+
+MAX_EARLIER = 1200
+GOING_ON = ("\n\nนักเรียนได้คำตอบข้างล่างนี้ไปแล้วจากคำถามก่อนหน้า ห้ามเล่าซ้ำ และห้ามเริ่มอธิบายเรื่องเดิมใหม่ "
+            "ตอบเฉพาะสิ่งที่คำถามตอนนี้ถาม ถ้าคำถามตอนนี้ขอให้เล่าเพิ่มโดยไม่เจาะจง "
+            "ให้เล่าส่วนที่ข้อความจากหนังสือมีแต่คำตอบเดิมยังไม่ได้พูดถึง "
+            "ถ้าข้อความจากหนังสือไม่มีอะไรเพิ่มแล้ว ให้บอกว่าหนังสืออธิบายไว้เท่านี้ "
+            "แล้วใช้ส่วนเสริมได้\n\nคำตอบที่ให้ไปแล้ว\n")
+
+
+async def answer(question: str, previous: str | None = None,
+                 previous_answer: str | None = None):
     """An Answer written from the book, or a refusal if no draft holds up."""
     import asyncio
 
     from app.answer import Answer, tidy_for_chat   # answer.py imports this module
 
     index = get_index()
+    if ABOUT_BOOK.search(question):
+        log.info("ABOUT THE BOOK | %r", question[:60])
+        return Answer(text=about_the_book(index), source="book")
+    asked = question
+    question = with_context(question, previous)
+    if question != asked:
+        log.info("FOLLOW-UP joined to %r | %r", (previous or "")[:50], asked[:50])
     hits, best = await asyncio.to_thread(index.find, question)
     if best < settings.book_min_sim:
-        log.info("REFUSED low-score dense=%.4f | %r", best, question[:80])
-        return Answer(text=OUT_OF_SCOPE, hits=hits, in_scope=False, source="book")
+        log.info("NOT A QUESTION FOR THE BOOK dense=%.4f | %r", best, question[:80])
+        return Answer(text=await chat_reply(asked), hits=hits, in_scope=False,
+                      source="book")
     log.info("ANSWERING dense=%.4f top=%s | %r", best, hits[0].rec["id"], question[:80])
 
-    user = (f"คำถามของนักเรียน\n{question}\n\n"
-            f"ข้อความจากหนังสือที่ค้นได้\n{build_context(hits)}")
+    if question == asked:
+        user = (f"คำถามของนักเรียน\n{question}\n\n"
+                f"ข้อความจากหนังสือที่ค้นได้\n{build_context(hits)}")
+    else:
+        user = (f"คำถามก่อนหน้าของนักเรียน\n{previous}\n\n"
+                f"คำถามตอนนี้ ซึ่งถามต่อจากคำถามก่อนหน้า\n{asked}\n\n"
+                f"ข้อความจากหนังสือที่ค้นได้\n{build_context(hits)}")
+        if previous_answer:
+            user += GOING_ON + previous_answer[:MAX_EARLIER]
     try:
         draft = await complete(SYSTEM_PROMPT, user)
     except LLMUnavailable as exc:
@@ -622,10 +745,23 @@ async def answer(question: str):
                   f"แต่พบเนื้อหาที่เกี่ยวข้องในหนังสือดังนี้\n\n{listing}"),
             citations=nearest(hits), hits=hits, source="book", error=str(exc))
 
+    context = question if question == asked else f"{question} {previous_answer or ''}"
+
+    def check(raw: str):
+        kept, ungrounded = drop_ungrounded(closing_remarks(raw), hits, context)
+        kept, numbers = drop_unsupported_numbers(kept, hits, context)
+        if numbers:
+            log.info("LINES WITH UNSUPPORTED NUMBERS DROPPED %s | %r",
+                     numbers[:3], question[:70])
+        why = reject(kept, hits, context)
+        if why and numbers and NO_ANSWER not in kept:
+            # nothing was left once those lines were out
+            why = f"number not in the passages: {numbers[0]}"
+        return kept, ungrounded, why
+
     raw, extra = split_supplement(draft)
     extra = clean_supplement(extra)
-    draft, ungrounded = drop_ungrounded(closing_remarks(raw), hits, question)
-    reason = reject(draft, hits, question)
+    draft, ungrounded, reason = check(raw)
     if reason == "no passage cited" and NO_ANSWER not in raw:
         # The model answered and left every pointer off, which the provider
         # does now and then on a question it answers properly the next time.
@@ -637,8 +773,7 @@ async def answer(question: str):
         except LLMUnavailable as exc:
             return unanswered(hits, f"llm unavailable on retry: {exc}")
         extra = clean_supplement(again) or extra
-        draft, ungrounded = drop_ungrounded(closing_remarks(raw), hits, question)
-        reason = reject(draft, hits, question)
+        draft, ungrounded, reason = check(raw)
     if ungrounded:
         log.info("UNGROUNDED LINES DROPPED %s | %r", ungrounded[:3], question[:70])
     if reason:
