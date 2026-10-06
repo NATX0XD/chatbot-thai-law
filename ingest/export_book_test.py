@@ -9,11 +9,11 @@ Reads the two answer files check_book wrote and writes
 data/eval/แบบทดสอบแชทบอทเครือข่าย.xlsx in the layout of the owner's Google
 Sheet: chapter, question, answer, then two score columns.
 
-The score columns are written EMPTY. A score is an assessor's reading of the
-answer against the book, and nobody has done that reading for this dataset;
-a number put there by this script would be a made-up result. The totals beside
-the table are formulas over those columns and stay at zero until someone fills
-them in.
+The score columns are never computed here. A score is a rater's reading of the
+answer against the book: when data/eval/network_test_scores.json exists (one
+row per question, written by the rater) its scores are copied in with the
+rater's note beside them, and when it does not the columns stay empty. The
+totals beside the table are formulas over those columns.
 """
 from __future__ import annotations
 
@@ -30,6 +30,8 @@ EVAL = os.path.join(BASE_DIR, "data", "eval")
 SOURCES = (os.path.join(EVAL, "network_exercise_answers.json"),
            os.path.join(EVAL, "network_answers.json"))
 OUT_PATH = os.path.join(EVAL, "แบบทดสอบแชทบอทเครือข่าย.xlsx")
+SCORES = os.path.join(EVAL, "network_test_scores.json")
+NOTE_HEAD = "หมายเหตุผู้ประเมิน"
 
 PINK = PatternFill("solid", fgColor="F4C7C3")
 GREEN = PatternFill("solid", fgColor="D9EAD3")
@@ -54,6 +56,25 @@ def load() -> list[dict]:
     return rows
 
 
+def scores() -> dict[str, dict]:
+    """What the rater gave each question, or nothing if no one has rated."""
+    if not os.path.exists(SCORES):
+        return {}
+    with open(SCORES, encoding="utf-8") as handle:
+        return {row["id"]: row for row in json.load(handle)}
+
+
+def scored(row: dict, given: dict[str, dict]) -> list:
+    """The two score cells and the note for one question; blanks if unrated.
+    A question outside the book has no RAG score: there is no text to hold it to."""
+    if not given:
+        return ["", "", ""]
+    if row["id"] not in given:
+        raise SystemExit(f"{SCORES} ไม่มีคะแนนของข้อ {row['id']}")
+    one = given[row["id"]]
+    return [one["match"], "" if one["rag"] is None else one["rag"], one.get("note", "")]
+
+
 def chapter_of(row: dict):
     """The chapter the exercise is from, or the first one the answer cites."""
     if row.get("chapter"):
@@ -69,12 +90,19 @@ def table(sheet, rows: list[dict]) -> int:
         cell = sheet.cell(row=1, column=col, value=head)
         cell.font, cell.border = Font(bold=True), BOX
     sheet["D1"].fill, sheet["E1"].fill = PINK, GREEN
+    given = scores()
+    if given:
+        sheet.cell(row=1, column=6, value=NOTE_HEAD).font = Font(bold=True)
+        sheet.column_dimensions["F"].width = 60
     for at, row in enumerate(rows, start=2):
         sheet.cell(row=at, column=1, value=chapter_of(row))
         sheet.cell(row=at, column=2, value=row["question"])
         sheet.cell(row=at, column=3, value=row["answer"])
-        sheet.cell(row=at, column=4).fill = PINK
-        sheet.cell(row=at, column=5).fill = GREEN
+        match, rag, note = scored(row, given)
+        sheet.cell(row=at, column=4, value=match if match != "" else None).fill = PINK
+        sheet.cell(row=at, column=5, value=rag if rag != "" else None).fill = GREEN
+        if given:
+            sheet.cell(row=at, column=6, value=note).alignment = WRAP
         for col in range(1, 6):
             sheet.cell(row=at, column=col).alignment = WRAP
             sheet.cell(row=at, column=col).border = BOX
@@ -125,7 +153,7 @@ def main() -> None:
     side_tables(other, table(other, outside))
     book.save(OUT_PATH)
     print(f"{len(inside)} ข้อจากหนังสือ, {len(outside)} ข้อนอกหนังสือ -> {OUT_PATH}")
-    print("ช่องคะแนนเว้นว่างไว้ให้ผู้ประเมินกรอก")
+    print(f"คะแนนคัดลอกจาก {SCORES}" if scores() else "ยังไม่มีไฟล์คะแนน ช่องคะแนนเว้นว่าง")
 
 
 if __name__ == "__main__":

@@ -9,11 +9,9 @@ the owner's sheet. The sheet has to be shared with the service account's e-mail
 as an editor; the key file stays outside this repository, which is public.
 
 Tabs already in the sheet are left alone. The two tabs written here are
-replaced whole on every run, score columns included: fill the scores in after
-the last run, not before.
-
-The score columns are written EMPTY for the same reason as in the workbook: a
-score is an assessor's reading, and nobody has done that reading.
+replaced whole on every run, score columns included: a score typed into the
+sheet by hand is lost, so scores belong in data/eval/network_test_scores.json,
+from where they are copied in. Without that file the columns are left empty.
 """
 from __future__ import annotations
 
@@ -28,7 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from ingest.export_book_test import RUBRIC, chapter_of, load
+from ingest.export_book_test import NOTE_HEAD, RUBRIC, chapter_of, load, scored, scores
 
 API = "https://sheets.googleapis.com/v4/spreadsheets"
 SCOPE = "https://www.googleapis.com/auth/spreadsheets"
@@ -38,7 +36,7 @@ HEADS = ["บทที่", "คำถามที่ใช้", "คำตอ�
 PINK = {"red": 0.957, "green": 0.780, "blue": 0.765}
 GREEN = {"red": 0.851, "green": 0.918, "blue": 0.827}
 TEAL = {"red": 0.788, "green": 0.867, "blue": 0.878}
-WIDTHS = {0: 60, 1: 330, 2: 640, 3: 150, 4: 110, 6: 170, 7: 130, 8: 150, 10: 160,
+WIDTHS = {0: 60, 1: 330, 2: 640, 3: 150, 4: 110, 5: 320, 6: 170, 7: 130, 8: 150, 10: 160,
           11: 60, 12: 380, 13: 70}
 
 
@@ -92,17 +90,19 @@ class Sheet:
 
 def values(rows: list[dict]) -> list[list]:
     last = len(rows) + 1
-    grid = [HEADS + ["", "", "คำถามตรง ตอบตรง", "คำถามตรง ตอบไม่ตรง", "", "",
-                     "ระดับ", "เกณฑ์", "คะแนน"]]
+    given = scores()
+    grid = [HEADS + [NOTE_HEAD if given else "", "", "คำถามตรง ตอบตรง",
+                     "คำถามตรง ตอบไม่ตรง", "", "", "ระดับ", "เกณฑ์", "คะแนน"]]
     for row in rows:
-        grid.append([chapter_of(row), row["question"], row["answer"], "", ""])
+        match, rag, note = scored(row, given)
+        grid.append([chapter_of(row), row["question"], row["answer"], match, rag, note])
     side = [["", "ประเมินค่าความถูกต้อง", f"=COUNTIF(D2:D{last},1)",
              f"=COUNTIF(D2:D{last},0)", "", "ประเมิน RAG and LLM"]]
     side += [[""] * 6 for _ in RUBRIC[1:]]
     for at, (level, wording) in enumerate(RUBRIC):
         while len(grid) <= at + 1:
-            grid.append([""] * 5)
-        grid[at + 1] = (grid[at + 1] + [""] * 5)[:5] + side[at] + [level, wording, level]
+            grid.append([""] * 6)
+        grid[at + 1] = (grid[at + 1] + [""] * 6)[:6] + side[at][1:] + [level, wording, level]
     return grid
 
 
@@ -132,7 +132,7 @@ def layout(tab: int, last: int) -> list[dict]:
            choice(tab, last, 3, ["0", "1"]), choice(tab, last, 4, ["0", "1", "2"]),
            {"repeatCell": {
                "range": {"sheetId": tab, "startRowIndex": 0, "endRowIndex": last,
-                         "startColumnIndex": 0, "endColumnIndex": 3},
+                         "startColumnIndex": 0, "endColumnIndex": 6},
                "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP",
                                               "verticalAlignment": "TOP"}},
                "fields": "userEnteredFormat(wrapStrategy,verticalAlignment)"}},
