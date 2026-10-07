@@ -122,14 +122,19 @@ def _headers() -> dict:
 
 
 async def show_loading(chat_id: str, seconds: int = 60) -> None:
-    """The typing indicator; purely cosmetic, so failures are swallowed."""
+    """The typing indicator. Cosmetic, so a failure does not stop the answer,
+    but it is logged: someone waiting with no sign of life takes the bot for
+    broken, and a refusal from LINE used to pass here without a trace."""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(LOADING_URL, headers=_headers(),
-                              json={"chatId": chat_id,
-                                    "loadingSeconds": min(seconds, 60)})
+            resp = await client.post(LOADING_URL, headers=_headers(),
+                                     json={"chatId": chat_id,
+                                           "loadingSeconds": min(seconds, 60)})
+        if resp.status_code >= 300:
+            log.warning("loading indicator refused: %s %s", resp.status_code,
+                        resp.text[:200])
     except httpx.HTTPError as exc:
-        log.debug("loading indicator failed: %s", exc)
+        log.warning("loading indicator failed: %s", exc)
 
 
 def _as_messages(payload) -> list[dict]:
