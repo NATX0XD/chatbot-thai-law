@@ -138,7 +138,24 @@ def _as_messages(payload) -> list[dict]:
         payload = [{"type": "text", "text": payload}]
     elif isinstance(payload, dict):
         payload = [payload]
-    return list(payload)[:5]
+    return [signed(message) for message in list(payload)[:5]]
+
+
+# The name and picture beside each message. The account's own name and picture
+# -- what heads the chat and the friends list -- can only be changed by its
+# owner in LINE Official Account Manager; until that is done, and in any case
+# for the Teachers Council dataset, these two say which bot is speaking.
+SENDER_NAME = "ผู้ช่วยเครือข่าย"          # LINE allows 20 characters
+SENDER_ICON = "/static/logo-network.png"
+
+
+def signed(message: dict) -> dict:
+    """The message with the networking bot's name and logo on it."""
+    if settings.dataset != "network" or "sender" in message:
+        return message
+    return {**message, "sender": {
+        "name": SENDER_NAME,
+        "iconUrl": settings.public_base_url.rstrip("/") + SENDER_ICON}}
 
 
 async def reply(reply_token: str, payload) -> bool:

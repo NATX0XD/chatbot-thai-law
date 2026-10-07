@@ -655,3 +655,22 @@ def test_a_chunk_id_in_a_note_becomes_its_chapter_and_pages():
     shown = plain(f"ตรงกับ {rec['id']}")
     assert rec["id"] not in shown
     assert shown.startswith(f"ตรงกับ หนังสือบทที่ {rec['chapter']} หน้า {rec['page_from']}")
+
+
+def test_every_line_message_carries_the_networking_name_and_logo(monkeypatch):
+    from app import line_bot
+    monkeypatch.setattr(settings, "dataset", "network")
+    monkeypatch.setattr(settings, "public_base_url", "https://bot.example/")
+    sent = line_bot._as_messages([{"type": "text", "text": "สวัสดีครับ"},
+                                  {"type": "flex", "altText": "a", "contents": {}}])
+    assert all(m["sender"] == {"name": "ผู้ช่วยเครือข่าย",
+                               "iconUrl": "https://bot.example/static/logo-network.png"}
+               for m in sent)
+    assert len(line_bot.SENDER_NAME) <= 20
+    assert line_bot._as_messages("ข้อความเดียว")[0]["sender"]["name"] == "ผู้ช่วยเครือข่าย"
+
+
+def test_the_teachers_council_bot_keeps_the_account_name(monkeypatch):
+    from app import line_bot
+    monkeypatch.setattr(settings, "dataset", "ksp")
+    assert "sender" not in line_bot._as_messages("ข้อความ")[0]
