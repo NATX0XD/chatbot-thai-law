@@ -48,7 +48,7 @@ from dataclasses import dataclass, field
 from app import articles, book
 from app.config import settings
 from app.coverage import answer_beyond_corpus as find_gap_in_answer, find_gap
-from app.flex import answer_message, figures_message
+from app.flex import answer_message, breakable, figures_message
 from app.llm import LLMUnavailable, complete
 from app.refuse import compose as compose_refusal
 from app.retriever import Hit, get_retriever
@@ -256,11 +256,36 @@ class Answer:
         body = self.text.strip()
         if len(body) > settings.max_answer_chars:
             body = body[:settings.max_answer_chars].rstrip() + " …"
+        if self.source in ("book", "model"):
+            return self.for_line_from_the_book(body)
         messages = [{"type": "text", "text": f"{body}\n\n{self.disclaimer}"}]
         if self.citations:
             messages.append(answer_message(body, self.citations,
                                            in_scope=self.in_scope,
                                            source=self.source))
+        if self.figures:
+            messages.append(figures_message(self.figures, settings.public_base_url))
+        return messages
+
+
+    def for_line_from_the_book(self, body: str) -> list:
+        """The networking bot says a thing once.
+
+        Sent as text and again as a card, an answer filled two screens with
+        the same words, and the owner reading it in LINE called it stretched
+        (2026-10-07). An answer with references goes as the card alone, which
+        carries the notice in its footer; anything else -- a greeting, a
+        reply to small talk, an answer from general knowledge -- is plain
+        text, and only a real answer carries the notice.
+        """
+        if self.citations:
+            messages = [answer_message(breakable(body), self.citations,
+                                       in_scope=self.in_scope, source=self.source)]
+        elif self.in_scope:
+            messages = [{"type": "text",
+                         "text": breakable(f"{body}\n\n{self.disclaimer}")}]
+        else:
+            messages = [{"type": "text", "text": breakable(body)}]
         if self.figures:
             messages.append(figures_message(self.figures, settings.public_base_url))
         return messages

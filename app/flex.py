@@ -148,10 +148,40 @@ def answer_message(answer_text: str, citations: list[str], *,
     }
 
 
+THAI_LETTER = re.compile(r"[\u0E00-\u0E7F]")
+ZERO_WIDTH_SPACE = "\u200b"
+# One frame for every picture. A carousel is as tall as its tallest bubble:
+# given each picture's own ratio, one upright photograph stretched every other
+# card in the row into a column of white.
+FIGURE_FRAME = "4:3"
+
+
+def breakable(text: str) -> str:
+    """The same text, with an invisible break allowed between Thai words.
+
+    Thai is written without spaces, and LINE breaks a line only at one. A
+    sentence that names its terms in English -- "สาย LAN คือสายเคเบิลที่ใช้..."
+    -- has spaces only around those terms, so the client ended the line after
+    "LAN" and left it two words long. A zero-width space between words, cut by
+    newmm, lets the line run to the edge.
+    """
+    from pythainlp.tokenize import word_tokenize
+
+    out = []
+    for line in text.split("\n"):
+        words = word_tokenize(line, engine="newmm", keep_whitespace=True)
+        joined = words[:1]
+        for before, after in zip(words, words[1:]):
+            if THAI_LETTER.match(before[-1:]) and THAI_LETTER.match(after[:1]):
+                joined.append(ZERO_WIDTH_SPACE)
+            joined.append(after)
+        out.append("".join(joined))
+    return "\n".join(out)
+
+
 def _figure_bubble(figure: dict, base_url: str) -> dict:
     url = base_url.rstrip("/") + figure["url"]
-    # Flex refuses a ratio taller than 1:3; nothing cut from the book comes close
-    ratio = f"{max(1, figure['width'])}:{max(1, figure['height'])}"
+    ratio = FIGURE_FRAME
     label = (f"รูปที่ {figure['number']} {figure['caption']}"
              if figure.get("kind", "figure") == "figure" else figure["caption"])
     return {
@@ -161,7 +191,7 @@ def _figure_bubble(figure: dict, base_url: str) -> dict:
                  "action": {"type": "uri", "uri": url}},
         "body": {"type": "box", "layout": "vertical", "paddingAll": "12px",
                  "contents": [
-                     _text(label[:160], size="xs", color=INK),
+                     _text(breakable(label[:160]), size="xs", color=INK),
                      _text(f"หน้า {figure['page']}", size="xxs", color=MUTED, margin="sm"),
                  ]},
     }

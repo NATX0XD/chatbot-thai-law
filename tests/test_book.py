@@ -248,14 +248,46 @@ def test_figures_go_to_line_as_one_carousel_with_full_addresses(monkeypatch):
                               photos=photos)
     messages = Answer(text="คำตอบ", citations=[CABLE.citation], source="book",
                       figures=shown).for_line_messages()
-    assert [m["type"] for m in messages] == ["text", "flex", "flex"]
-    bubbles = messages[2]["contents"]["contents"]
+    # One card and the pictures. The answer used to go as text and again as a
+    # card; the owner, reading it in LINE on 2026-10-07, asked for it once.
+    assert [m["type"] for m in messages] == ["flex", "flex"]
+    bubbles = messages[1]["contents"]["contents"]
     assert [b["hero"]["url"] for b in bubbles] == [
         "https://bot.example/static/figures/fig-2-3.jpg",
         "https://bot.example/static/figures/photo-42-1.jpg"]
-    assert bubbles[0]["body"]["contents"][0]["text"] == "รูปที่ 2.3 สายคู่บิดเกลียว"
-    assert bubbles[1]["body"]["contents"][0]["text"] == "ขั้นตอนที่ 3 นำมาจัดเรียงสี"
-    assert "คู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น" in messages[0]["text"]
+    shown_text = [b["body"]["contents"][0]["text"].replace("\u200b", "") for b in bubbles]
+    assert shown_text == ["รูปที่ 2.3 สายคู่บิดเกลียว", "ขั้นตอนที่ 3 นำมาจัดเรียงสี"]
+    # the notice travels on the card, so it is still said, once
+    import json
+    assert "คู่มือเรียนเครือข่ายคอมพิวเตอร์เบื้องต้น" in json.dumps(
+        messages[0], ensure_ascii=False)
+    # a carousel is as tall as its tallest card: every picture gets one frame
+    assert {b["hero"]["aspectRatio"] for b in bubbles} == {"4:3"}
+
+
+def test_thai_can_break_between_words_and_reads_the_same():
+    from app.flex import breakable
+    line = "สาย LAN คือสายเคเบิลที่ใช้เชื่อมต่ออุปกรณ์ในเครือข่ายคอมพิวเตอร์"
+    made = breakable(line)
+    assert made.replace("\u200b", "") == line
+    assert "สาย\u200bเคเบิล" in made or "สายเคเบิล\u200b" in made
+    assert breakable("บรรทัดแรก\nบรรทัดสอง").count("\n") == 1
+
+
+def test_a_greeting_in_line_is_one_short_message_without_the_notice():
+    from app.answer import Answer
+    said = Answer(text="สวัสดีครับ อยากทบทวนเรื่องไหนดีครับ", in_scope=False,
+                  source="book").for_line_messages()
+    assert [m["type"] for m in said] == ["text"]
+    assert "ควรอ่านเนื้อหาเต็ม" not in said[0]["text"]
+
+
+def test_an_answer_from_general_knowledge_is_text_with_its_notice():
+    from app.answer import Answer
+    said = Answer(text="IPv6 ยาว 128 บิต", source="model").for_line_messages()
+    assert [m["type"] for m in said] == ["text"]
+    assert book.MODEL_DISCLAIMER.replace(" ", "")[:20] in said[0]["text"].replace(
+        "\u200b", "").replace(" ", "")
 
 
 def test_one_figure_is_a_single_card_not_a_carousel():
