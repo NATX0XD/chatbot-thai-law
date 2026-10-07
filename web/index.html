@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ผู้ช่วยวิชาเครือข่ายคอมพิวเตอร์เบื้องต้น — KMUTNB</title>
 <link rel="icon" type="image/png" href="/static/logo-network.png">
 <link rel="apple-touch-icon" href="/static/logo-network.png">
@@ -284,10 +284,80 @@
   .figs figcaption { padding: 7px 11px; font-size: 12.5px; color: var(--muted);
     border-top: 1px solid var(--line); background: #fafcfe; }
 
+  /* the menu button and the dimmed backdrop exist only on a narrow screen */
+  .narrow { display: none; }
+  .menu { display: none; }
+  .scrim { display: none; }
+
+  /* ---------------------------------------------------------- phone
+     The floating window becomes the whole screen, and the sidebar a drawer
+     opened from the menu button: hidden outright, as it was, a phone had no
+     way to reach the examples, the book's contents or an earlier chat. */
   @media (max-width: 860px) {
-    .app { grid-template-columns: 1fr; inset: 8px; }
-    .side { display: none; }
-    .hero h1 { font-size: 25px; }
+    .app { grid-template-columns: 1fr; inset: 0; gap: 0; }
+    .main { border: 0; border-radius: 0; }
+    .side {
+      position: fixed; top: 0; bottom: 0; left: 0; z-index: 30;
+      width: min(84vw, 310px); border-radius: 0 var(--r-lg) var(--r-lg) 0;
+      padding: calc(16px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+      transform: translateX(-105%); transition: transform .22s ease;
+      box-shadow: 0 18px 50px rgba(16,26,36,.22);
+    }
+    body.menu-open .side { transform: none; }
+    .scrim {
+      display: block; position: fixed; inset: 0; z-index: 20;
+      background: rgba(16,26,36,.38); opacity: 0; pointer-events: none;
+      transition: opacity .22s ease;
+    }
+    body.menu-open .scrim { opacity: 1; pointer-events: auto; }
+    .menu {
+      display: grid; place-items: center; flex: none;
+      width: 40px; height: 40px; border-radius: 12px;
+      border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+    }
+    .top { padding: calc(10px + env(safe-area-inset-top)) 12px 8px; gap: 8px; }
+    .topleft { min-width: 0; }
+    .model { padding: 6px 12px 6px 7px; font-size: 12.5px; min-width: 0; }
+    .model span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topright { gap: 7px; }
+    .newchat, .lineTop { padding: 10px 13px; }
+
+    .hero { padding: 3vh 16px 0; }
+    .orb { width: 84px; height: 84px; margin-bottom: 16px; }
+    .hero h1 { font-size: 24px; }
+    .hero p { font-size: 14px; }
+    .chips { padding: 18px 4px 0; gap: 7px; }
+    .chips button { padding: 9px 13px; }
+
+    .log { padding: 14px 12px 6px; }
+    .msg { margin-bottom: 14px; }
+    .bubble { max-width: 94%; padding: 11px 14px; }
+    .figs { grid-template-columns: 1fr; }
+
+    .panel { padding: 18px 14px 6px; }
+    .qgrid { grid-template-columns: 1fr; }
+    .nums { gap: 7px; }
+    .nums div { padding: 11px 9px; }
+    .nums b { font-size: 21px; }
+    .acts div { padding: 9px 11px; }
+
+    .composer { padding: 6px 10px calc(10px + env(safe-area-inset-bottom)); }
+    .box { padding: 11px 12px 9px; border-radius: 18px; }
+    /* 16px: below that, iOS zooms the page in when the box is tapped */
+    .box textarea { font-size: 16px; min-height: 44px; }
+    /* the two switches keep to one line each: their short names on a phone */
+    .tools .pill { padding: 9px 12px; white-space: nowrap; }
+    .tools .wide { display: none; }
+    .tools .narrow { display: inline; }
+    .send { width: 42px; height: 42px; }
+    .hint { display: none; }
+    nav button, .hist button { padding-top: 10px; padding-bottom: 10px; }
+  }
+  @media (max-width: 480px) {
+    /* icons only: three labelled buttons do not fit beside the menu */
+    .newchat .lbl, .lineTop .lbl { display: none; }
+    .newchat, .lineTop { padding: 11px; }
+    .model span { max-width: 34vw; }
   }
 </style>
 </head>
@@ -336,20 +406,28 @@
     </div>
   </aside>
 
+  <div class="scrim" id="scrim"></div>
+
   <section class="main">
     <div class="top">
+      <div class="topleft" style="display:flex;align-items:center;gap:8px">
+      <button class="menu" id="menu" type="button" aria-label="เปิดเมนู" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
       <div class="model"><img src="/static/logo-network.png" alt="" width="22" height="22"><span>Typhoon + BGE-M3</span></div>
+      </div>
       <div class="topright">
-        <a class="lineTop" id="lineTop" href="#" target="_blank" rel="noopener">
+        <a class="lineTop" id="lineTop" href="#" target="_blank" rel="noopener" aria-label="เพิ่มเพื่อนใน LINE">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 3C6.9 3 2.8 6.4 2.8 10.5c0 3.7 3.3 6.8 7.7 7.4.3.06.7.2.8.5.1.25.07.6.03.9l-.13.8c-.04.24-.19.93.82.5 1-.42 5.4-3.2 7.4-5.5 1.35-1.5 2-3 2-4.6C21.4 6.4 17.2 3 12 3z"/>
           </svg>
-          เพิ่มเพื่อน
+          <span class="lbl">เพิ่มเพื่อน</span>
         </a>
-        <button class="newchat" id="newChat">
+        <button class="newchat" id="newChat" aria-label="แชทใหม่">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 5v14M5 12h14"/></svg>
-          แชทใหม่
+          <span class="lbl">แชทใหม่</span>
         </button>
       </div>
     </div>
@@ -372,12 +450,12 @@
           <button type="button" class="pill" id="tSearch" title="ข้ามการเรียบเรียงคำตอบ แสดงเฉพาะเนื้อหาในหนังสือที่ค้นเจอ">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
-            ค้นเนื้อหาอย่างเดียว
+            <span class="wide">ค้นเนื้อหาอย่างเดียว</span><span class="narrow">ค้นอย่างเดียว</span>
           </button>
           <button type="button" class="pill" id="tSources" title="เปิดกล่องเนื้อหาอ้างอิงไว้เสมอ">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/></svg>
-            กางเนื้อหาอ้างอิงอัตโนมัติ
+            <span class="wide">กางเนื้อหาอ้างอิงอัตโนมัติ</span><span class="narrow">กางอ้างอิง</span>
           </button>
           <span class="grow"></span>
           <button type="submit" class="send" id="send" title="ส่ง (Enter)">
@@ -758,6 +836,20 @@ async function submit() {
     scroll.scrollTop = scroll.scrollHeight;
   }
 }
+
+/* ---------------------------------------------------------------- menu
+   On a phone the sidebar is a drawer. Whatever is picked from it -- a panel,
+   an earlier chat, a new one -- closes it, since the pick is what was wanted. */
+function menu(open) {
+  document.body.classList.toggle('menu-open', open);
+  $('menu').setAttribute('aria-expanded', String(open));
+}
+$('menu').onclick = () => menu(!document.body.classList.contains('menu-open'));
+$('scrim').onclick = () => menu(false);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') menu(false); });
+document.querySelector('.side').addEventListener('click', e => {
+  if (e.target.closest('nav button, .hist button')) menu(false);
+});
 
 /* ---------------------------------------------------------------- boot */
 // one place for the account link, used by the sidebar and the header button
