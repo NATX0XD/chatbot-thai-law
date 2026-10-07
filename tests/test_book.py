@@ -406,14 +406,21 @@ def test_a_networking_question_is_not_taken_for_one_about_the_bot(question):
 
 
 @pytest.mark.parametrize("message", ["อยากรู้เพิ่มเติมอีก", "แล้วข้อเสียล่ะ", "ยกตัวอย่างหน่อย",
-                                     "ไม่เข้าใจ", "ทำไมล่ะ", "ขอรูปหน่อย"])
+                                     "ไม่เข้าใจ", "ทำไมล่ะ", "ขอรูปหน่อย",
+                                     # asked on the live page, 7 Oct, and searched on its own
+                                     "ขอละเอียดๆหน่อย", "ขอแบบละเอียด", "อธิบายเพิ่มหน่อย",
+                                     "ขออีกที", "ลึกกว่านี้ได้ไหม", "ขอรายละเอียดเพิ่ม",
+                                     "อธิบายใหม่"])
 def test_a_follow_up_is_read_with_the_question_before_it(message):
     assert book.with_context(message, "สาย Lan คืออะไร") == f"{message} — สาย Lan คืออะไร"
     assert book.with_context(message, None) == message
 
 
 @pytest.mark.parametrize("message", ["แบบจำลอง OSI มีกี่ชั้น", "โทโปโลยีแบบดาวคืออะไร",
-                                     "ฮับกับสวิตช์ต่างกันอย่างไร"])
+                                     "ฮับกับสวิตช์ต่างกันอย่างไร",
+                                     "ดูรายละเอียดข้อมูลเครื่องใน Alchemy ตรงไหน",
+                                     "ขอรายละเอียดของแบบจำลอง OSI",
+                                     "อธิบายโทโปโลยีแบบดาวอย่างละเอียด"])
 def test_a_new_question_is_not_tied_to_the_one_before(message):
     assert book.with_context(message, "สาย Lan คืออะไร") == message
 
