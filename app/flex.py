@@ -165,11 +165,12 @@ def breakable(text: str) -> str:
     "LAN" and left it two words long. A zero-width space between words, cut by
     newmm, lets the line run to the edge.
     """
-    from pythainlp.tokenize import word_tokenize
+    # the repository's own newmm: pythainlp is not installed on the server
+    from app.thai_tokenize import word_tokenize
 
     out = []
     for line in text.split("\n"):
-        words = word_tokenize(line, engine="newmm", keep_whitespace=True)
+        words = word_tokenize(line, keep_whitespace=True)
         joined = words[:1]
         for before, after in zip(words, words[1:]):
             if THAI_LETTER.match(before[-1:]) and THAI_LETTER.match(after[:1]):

@@ -51,3 +51,19 @@ def test_no_data_file_is_kept_in_the_context_that_nothing_copies():
     assert not unused, (
         "these survive .dockerignore but no COPY uses them, so they only make "
         f"the build context bigger: {sorted(unused)}")
+
+
+def test_the_app_imports_nothing_the_server_image_does_not_install():
+    """requirements-server.txt leaves pythainlp, torch, sentence-transformers
+    and rank_bm25 out to fit the host's memory. A function-level
+    `from pythainlp...` in app/flex.py passed every test on a development
+    machine, where the package is installed, and took every LINE reply down
+    on the server (2026-10-07)."""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    absent = re.compile(r"^\s*(?:from|import)\s+(pythainlp|rank_bm25)\b", re.M)
+    found = [f"{path.relative_to(root)}: {m.group(1)}"
+             for path in sorted((root / "app").rglob("*.py"))
+             for m in absent.finditer(path.read_text(encoding="utf-8"))]
+    assert not found, found
